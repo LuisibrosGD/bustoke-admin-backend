@@ -1,4 +1,5 @@
 import io
+from datetime import datetime
 from typing import Any, Optional
 
 from sqlalchemy import text
@@ -24,89 +25,11 @@ async def reporte_ventas(
         filters.append("a.id_agencia = :id_agencia")
         params["id_agencia"] = id_agencia
     if fecha_inicio:
-        filters.append("b.fecha_emision >= :fecha_inicio::timestamp")
-        params["fecha_inicio"] = fecha_inicio
+        filters.append("b.fecha_emision >= :fecha_inicio")
+        params["fecha_inicio"] = datetime.fromisoformat(fecha_inicio)
     if fecha_fin:
-        filters.append("b.fecha_emision <= :fecha_fin::timestamp")
-        params["fecha_fin"] = fecha_fin
-    if id_ruta:
-        ids = [x.strip() for x in id_ruta.split(",") if x.strip()]
-        if ids:
-            placeholders = ", ".join(f":ruta_{i}" for i in range(len(ids)))
-            filters.append(f"v.id_ruta IN ({placeholders})")
-            for i, val in enumerate(ids):
-                params[f"ruta_{i}"] = int(val)
-    if canal_venta:
-        ids = [x.strip() for x in canal_venta.split(",") if x.strip()]
-        if ids:
-            placeholders = ", ".join(f":canal_{i}" for i in range(len(ids)))
-            filters.append(f"b.canal IN ({placeholders})")
-            for i, val in enumerate(ids):
-                params[f"canal_{i}"] = val
-    if metodo_pago:
-        ids = [x.strip() for x in metodo_pago.split(",") if x.strip()]
-        if ids:
-            placeholders = ", ".join(f":metodo_{i}" for i in range(len(ids)))
-            filters.append(f"pg.metodo IN ({placeholders})")
-            for i, val in enumerate(ids):
-                params[f"metodo_{i}"] = val
-    if estado_pago:
-        ids = [x.strip() for x in estado_pago.split(",") if x.strip()]
-        if ids:
-            placeholders = ", ".join(f":epago_{i}" for i in range(len(ids)))
-            filters.append(f"pg.estado IN ({placeholders})")
-            for i, val in enumerate(ids):
-                params[f"epago_{i}"] = val
-
-    where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
-
-    sql = text(f"""
-        SELECT
-            TO_CHAR(b.fecha_emision, 'YYYY-MM') AS periodo,
-            b.canal,
-            COUNT(b.id_boleto)                  AS total_boletos,
-            SUM(b.precio_final)                 AS total_ventas
-        FROM boletos b
-        JOIN viajes v ON b.id_viaje = v.id_viaje
-        JOIN rutas r  ON v.id_ruta  = r.id_ruta
-        JOIN agencias a ON r.id_agencia = a.id_agencia
-        LEFT JOIN pagos pg ON pg.id_boleto = b.id_boleto
-        {where_clause}
-        GROUP BY periodo, b.canal
-        ORDER BY periodo DESC, b.canal
-    """)
-
-    result = await db.execute(sql, params)
-    rows = result.mappings().all()
-    return [
-        {
-            "periodo": row["periodo"],
-            "canal": row["canal"],
-            "totalBoletos": int(row["total_boletos"]),
-            "totalVentas": float(row["total_ventas"]),
-        }
-        for row in rows
-    ]
-
-
-async def reporte_viajes(
-    db: AsyncSession,
-    id_agencia: Optional[int] = None,
-    fecha_inicio: Optional[str] = None,
-    fecha_fin: Optional[str] = None,
-) -> list[dict[str, Any]]:
-    filters = []
-    params: dict[str, Any] = {}
-
-    if id_agencia:
-        filters.append("r.id_agencia = :id_agencia")
-        params["id_agencia"] = id_agencia
-    if fecha_inicio:
-        filters.append("v.fecha_hora_salida >= :fecha_inicio")
-        params["fecha_inicio"] = fecha_inicio
-    if fecha_fin:
-        filters.append("v.fecha_hora_salida <= :fecha_fin")
-        params["fecha_fin"] = fecha_fin
+        filters.append("b.fecha_emision <= :fecha_fin")
+        params["fecha_fin"] = datetime.fromisoformat(fecha_fin)
 
     where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
 
