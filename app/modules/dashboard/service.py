@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import func, literal_column, select
@@ -9,7 +9,6 @@ from app.modules.agencias_terminales.models import AgenciaTerminal
 from app.modules.flota.models import Bus
 from app.modules.rutas.models import Ruta
 from app.modules.viajes.models import Boleto, Viaje
-from app.modules.viajes.models import Pasajero
 
 
 async def get_dashboard_data(db: AsyncSession, id_agencia: int | None = None) -> dict:
@@ -87,7 +86,21 @@ async def get_dashboard_data(db: AsyncSession, id_agencia: int | None = None) ->
     ]
 
     # ── Viajes por mes (últimos 12 meses) ──────────────────────────────
-    twelve_months_ago = now.replace(day=1) - timedelta(days=365)
+    month_names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    monthly_trips = [{"month": "", "viajes": 0} for _ in range(12)]
+    lookup: dict[str, int] = {}
+    for i in range(12):
+        month_offset = now.month - 12 + i
+        y = now.year + (month_offset // 12)
+        m = (month_offset % 12) + 1
+        lookup[f"{y}-{m:02d}"] = i
+        monthly_trips[i]["month"] = month_names[m - 1]
+
+    first_offset = now.month - 12
+    first_year = now.year + (first_offset // 12)
+    first_month = (first_offset % 12) + 1
+    twelve_months_ago = datetime(first_year, first_month, 1)
+
     monthly_rows = (
         await db.execute(
             select(
@@ -101,16 +114,6 @@ async def get_dashboard_data(db: AsyncSession, id_agencia: int | None = None) ->
             .order_by(func.date_trunc(literal_column("'month'"), Viaje.fecha_hora_salida))
         )
     ).all()
-
-    month_names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-    monthly_trips = [{"month": "", "viajes": 0} for _ in range(12)]
-    lookup: dict[str, int] = {}
-    for i in range(12):
-        month_offset = now.month - 12 + i - 1
-        y = now.year + (month_offset // 12)
-        m = (month_offset % 12) + 1
-        lookup[f"{y}-{m:02d}"] = i
-        monthly_trips[i]["month"] = month_names[m - 1]
     for row in monthly_rows:
         if hasattr(row.mes, "month") and hasattr(row.mes, "year"):
             key = f"{row.mes.year}-{row.mes.month:02d}"
