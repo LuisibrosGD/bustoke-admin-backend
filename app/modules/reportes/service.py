@@ -24,10 +24,10 @@ async def reporte_ventas(
         filters.append("a.id_agencia = :id_agencia")
         params["id_agencia"] = id_agencia
     if fecha_inicio:
-        filters.append("b.fecha_emision >= :fecha_inicio")
+        filters.append("b.fecha_emision >= :fecha_inicio::timestamp")
         params["fecha_inicio"] = fecha_inicio
     if fecha_fin:
-        filters.append("b.fecha_emision <= :fecha_fin")
+        filters.append("b.fecha_emision <= :fecha_fin::timestamp")
         params["fecha_fin"] = fecha_fin
     if id_ruta:
         ids = [x.strip() for x in id_ruta.split(",") if x.strip()]
