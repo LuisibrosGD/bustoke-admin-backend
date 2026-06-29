@@ -1,5 +1,8 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.config import settings
 
@@ -28,12 +31,28 @@ from app.modules.manifiestos.router import router as manifiestos_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.notificaciones.router import router as notificaciones_router
 
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    from app.database import engine
+    from app.modules.viajes.models import Pago  # noqa: ensure model is registered
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            DO $$ BEGIN
+                CREATE TYPE metodo_pago AS ENUM ('yape', 'plin', 'tarjeta');
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$;
+        """))
+        await conn.run_sync(Pago.metadata.create_all)
+    yield
+
+
 app = FastAPI(
     title="Bustoke Admin API",
     version="1.0.0",
     description="Backend de administración para Bustoke",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # ── CORS ──────────────────────────────────────────────────────────────────────

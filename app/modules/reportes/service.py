@@ -12,6 +12,10 @@ async def reporte_ventas(
     id_agencia: Optional[int] = None,
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
+    id_ruta: Optional[str] = None,
+    estado_pago: Optional[str] = None,
+    metodo_pago: Optional[str] = None,
+    canal_venta: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     filters = []
     params: dict[str, Any] = {}
@@ -25,6 +29,34 @@ async def reporte_ventas(
     if fecha_fin:
         filters.append("b.fecha_emision <= :fecha_fin")
         params["fecha_fin"] = fecha_fin
+    if id_ruta:
+        ids = [x.strip() for x in id_ruta.split(",") if x.strip()]
+        if ids:
+            placeholders = ", ".join(f":ruta_{i}" for i in range(len(ids)))
+            filters.append(f"v.id_ruta IN ({placeholders})")
+            for i, val in enumerate(ids):
+                params[f"ruta_{i}"] = int(val)
+    if canal_venta:
+        ids = [x.strip() for x in canal_venta.split(",") if x.strip()]
+        if ids:
+            placeholders = ", ".join(f":canal_{i}" for i in range(len(ids)))
+            filters.append(f"b.canal IN ({placeholders})")
+            for i, val in enumerate(ids):
+                params[f"canal_{i}"] = val
+    if metodo_pago:
+        ids = [x.strip() for x in metodo_pago.split(",") if x.strip()]
+        if ids:
+            placeholders = ", ".join(f":metodo_{i}" for i in range(len(ids)))
+            filters.append(f"pg.metodo IN ({placeholders})")
+            for i, val in enumerate(ids):
+                params[f"metodo_{i}"] = val
+    if estado_pago:
+        ids = [x.strip() for x in estado_pago.split(",") if x.strip()]
+        if ids:
+            placeholders = ", ".join(f":epago_{i}" for i in range(len(ids)))
+            filters.append(f"pg.estado IN ({placeholders})")
+            for i, val in enumerate(ids):
+                params[f"epago_{i}"] = val
 
     where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
 
@@ -38,6 +70,7 @@ async def reporte_ventas(
         JOIN viajes v ON b.id_viaje = v.id_viaje
         JOIN rutas r  ON v.id_ruta  = r.id_ruta
         JOIN agencias a ON r.id_agencia = a.id_agencia
+        LEFT JOIN pagos pg ON pg.id_boleto = b.id_boleto
         {where_clause}
         GROUP BY periodo, b.canal
         ORDER BY periodo DESC, b.canal

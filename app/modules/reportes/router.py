@@ -18,12 +18,19 @@ async def get_reporte(
     db: DbDep,
     _: AdminOrSuper,
     id_agencia: Optional[int] = Query(None),
+    id_ruta: Optional[str] = Query(None),
     id_viaje: Optional[int] = Query(None),
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
+    estado_pago: Optional[str] = Query(None),
+    metodo_pago: Optional[str] = Query(None),
+    canal_venta: Optional[str] = Query(None),
 ):
     if slug == "ventas":
-        data = await service.reporte_ventas(db, id_agencia, fecha_inicio, fecha_fin)
+        data = await service.reporte_ventas(
+            db, id_agencia, fecha_inicio, fecha_fin,
+            id_ruta, estado_pago, metodo_pago, canal_venta,
+        )
     elif slug == "viajes":
         data = await service.reporte_viajes(db, id_agencia, fecha_inicio, fecha_fin)
     elif slug == "manifiesto-sutran":
@@ -44,12 +51,19 @@ async def export_reporte_excel(
     db: DbDep,
     _: AdminOrSuper,
     id_agencia: Optional[int] = Query(None),
+    id_ruta: Optional[str] = Query(None),
     id_viaje: Optional[int] = Query(None),
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
+    estado_pago: Optional[str] = Query(None),
+    metodo_pago: Optional[str] = Query(None),
+    canal_venta: Optional[str] = Query(None),
 ):
     if slug == "ventas":
-        data = await service.reporte_ventas(db, id_agencia, fecha_inicio, fecha_fin)
+        data = await service.reporte_ventas(
+            db, id_agencia, fecha_inicio, fecha_fin,
+            id_ruta, estado_pago, metodo_pago, canal_venta,
+        )
         sheet = "Ventas"
     elif slug == "viajes":
         data = await service.reporte_viajes(db, id_agencia, fecha_inicio, fecha_fin)

@@ -125,3 +125,26 @@ class Boleto(Base):
     )
     acepto_terminos_politicas: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     ip_registro: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+
+
+class Pago(Base):
+    __tablename__ = "pagos"
+
+    id_pago: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id_boleto: Mapped[int] = mapped_column(
+        Integer, ForeignKey("boletos.id_boleto"), nullable=False
+    )
+    metodo: Mapped[MetodoPago] = mapped_column(
+        SAEnum(MetodoPago, name="metodo_pago", create_type=False),
+        nullable=False,
+    )
+    estado: Mapped[EstadoPago] = mapped_column(
+        SAEnum(EstadoPago, name="estado_pago", create_type=False),
+        nullable=False,
+        default=EstadoPago.pendiente,
+    )
+    monto: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    fecha_pago: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    referencia: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
