@@ -22,6 +22,13 @@ class LiquidacionCreate(LiquidacionBase):
     pass
 
 
+class GenerarLiquidacionRequest(BaseModel):
+    periodo: str
+    id_agencia: int | None = Field(default=None, alias="idAgencia")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class LiquidacionUpdate(BaseModel):
     monto_ventas: Optional[Decimal] = Field(default=None, alias="montoVentas")
     comision_plataforma: Optional[Decimal] = Field(default=None, alias="comisionPlataforma")

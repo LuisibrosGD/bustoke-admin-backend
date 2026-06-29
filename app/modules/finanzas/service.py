@@ -1,6 +1,6 @@
 import secrets
 
-from sqlalchemy import func, select
+from sqlalchemy import func, literal_column, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestException, ConflictException, NotFoundException
@@ -11,6 +11,8 @@ from app.modules.finanzas.schemas import (
     LiquidacionCreate,
     LiquidacionUpdate,
 )
+from app.modules.viajes.models import Boleto, Viaje
+from app.modules.rutas.models import Ruta
 
 
 # ── Liquidaciones ─────────────────────────────────────────────────────────────
@@ -75,6 +77,68 @@ async def delete_liquidacion(db: AsyncSession, id_liquidacion: int) -> dict:
     await db.delete(liq)
     await db.commit()
     return {"message": f"Liquidacion {id_liquidacion} eliminada"}
+
+
+async def generar_liquidaciones(
+    db: AsyncSession, periodo: str, id_agencia: int | None = None
+) -> list[LiquidacionAgencia]:
+    if not (len(periodo) == 7 and periodo[4] == "-"):
+        raise BadRequestException("periodo debe tener formato YYYY-MM")
+
+    result = await db.execute(
+        select(
+            Ruta.id_agencia,
+            func.coalesce(func.sum(Boleto.precio_final), 0).label("total_ventas"),
+        )
+        .select_from(Boleto)
+        .join(Viaje, Boleto.id_viaje == Viaje.id_viaje)
+        .join(Ruta, Viaje.id_ruta == Ruta.id_ruta)
+        .where(
+            func.to_char(Boleto.fecha_emision, literal_column("'YYYY-MM'")) == periodo,
+            Boleto.estado != "cancelado",
+        )
+        .group_by(Ruta.id_agencia)
+    )
+    rows = result.all()
+
+    created: list[LiquidacionAgencia] = []
+    for row in rows:
+        agencia_id = row[0]
+        total_ventas = row[1]
+
+        if id_agencia is not None and agencia_id != id_agencia:
+            continue
+
+        existing = await db.execute(
+            select(LiquidacionAgencia).where(
+                LiquidacionAgencia.id_agencia == agencia_id,
+                LiquidacionAgencia.periodo == periodo,
+            )
+        )
+        if existing.scalar_one_or_none():
+            continue
+
+        liq = LiquidacionAgencia(
+            id_agencia=agencia_id,
+            periodo=periodo,
+            monto_ventas=total_ventas,
+            comision_plataforma=0,
+            monto_a_transferir=0,
+            estado_pago="pendiente",
+        )
+        db.add(liq)
+        await db.flush()
+        await db.refresh(liq)
+        created.append(liq)
+
+    if not created:
+        raise BadRequestException(
+            "No se generaron liquidaciones. "
+            "Puede que ya existan o no haya boletos en ese periodo."
+        )
+
+    await db.commit()
+    return created
 
 
 # ── ApiKeys ───────────────────────────────────────────────────────────────────

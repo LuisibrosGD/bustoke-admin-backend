@@ -6,6 +6,7 @@ from app.modules.finanzas.schemas import (
     ApiKeyCreate,
     ApiKeyOut,
     ApiKeyUpdate,
+    GenerarLiquidacionRequest,
     LiquidacionCreate,
     LiquidacionOut,
     LiquidacionUpdate,
@@ -31,6 +32,13 @@ async def list_liquidaciones(
     if id_agencia:
         return await service.get_liquidaciones_by_agencia(db, id_agencia)
     return await service.get_all_liquidaciones(db, skip, limit)
+
+
+@router.post("/admin/liquidaciones/generar", response_model=list[LiquidacionOut])
+async def generar_liquidaciones(body: GenerarLiquidacionRequest, db: DbDep, _: SuperAdmin):
+    return await service.generar_liquidaciones(
+        db, periodo=body.periodo, id_agencia=body.id_agencia
+    )
 
 
 @router.get("/admin/liquidaciones/{id_liquidacion}", response_model=LiquidacionOut)
