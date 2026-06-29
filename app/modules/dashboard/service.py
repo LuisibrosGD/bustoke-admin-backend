@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, literal_column, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.agencias.models import Agencia
@@ -91,14 +91,14 @@ async def get_dashboard_data(db: AsyncSession, id_agencia: int | None = None) ->
     monthly_rows = (
         await db.execute(
             select(
-                func.date_trunc("month", Viaje.fecha_hora_salida).label("mes"),
+                func.date_trunc(literal_column("'month'"), Viaje.fecha_hora_salida).label("mes"),
                 func.count(Viaje.id_viaje).label("total"),
             )
             .join(Ruta, Ruta.id_ruta == Viaje.id_ruta)
             .where(base_agencia_filter)
             .where(Viaje.fecha_hora_salida >= twelve_months_ago)
-            .group_by(func.date_trunc("month", Viaje.fecha_hora_salida))
-            .order_by(func.date_trunc("month", Viaje.fecha_hora_salida))
+            .group_by(func.date_trunc(literal_column("'month'"), Viaje.fecha_hora_salida))
+            .order_by(func.date_trunc(literal_column("'month'"), Viaje.fecha_hora_salida))
         )
     ).all()
 
