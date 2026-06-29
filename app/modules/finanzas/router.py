@@ -19,11 +19,15 @@ router = APIRouter(tags=["Finanzas"])
 @router.get("/admin/liquidaciones", response_model=list[LiquidacionOut])
 async def list_liquidaciones(
     db: DbDep,
-    _: AdminOrSuper,
+    current_user: AdminOrSuper,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     id_agencia: int | None = None,
 ):
+    user_agencia = current_user.get("id_agencia")
+    user_rol = current_user.get("rol")
+    if user_rol == "admin_agencia" and user_agencia:
+        return await service.get_liquidaciones_by_agencia(db, user_agencia)
     if id_agencia:
         return await service.get_liquidaciones_by_agencia(db, id_agencia)
     return await service.get_all_liquidaciones(db, skip, limit)
@@ -56,11 +60,15 @@ async def delete_liquidacion(id_liquidacion: int, db: DbDep, _: SuperAdmin):
 @router.get("/admin/api-keys", response_model=list[ApiKeyOut])
 async def list_api_keys(
     db: DbDep,
-    _: AdminOrSuper,
+    current_user: AdminOrSuper,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     id_agencia: int | None = None,
 ):
+    user_agencia = current_user.get("id_agencia")
+    user_rol = current_user.get("rol")
+    if user_rol == "admin_agencia" and user_agencia:
+        return await service.get_api_keys_by_agencia(db, user_agencia)
     if id_agencia:
         return await service.get_api_keys_by_agencia(db, id_agencia)
     return await service.get_all_api_keys(db, skip, limit)
