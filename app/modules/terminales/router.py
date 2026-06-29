@@ -14,10 +14,12 @@ async def list_terminales(
     current_user: AdminOrSuper,
     skip: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=500),
+    id_agencia: int | None = Query(default=None),
 ):
     user_agencia = current_user.get("id_agencia")
     user_rol = current_user.get("rol")
-    id_agencia = user_agencia if user_rol == "admin_agencia" else None
+    if id_agencia is None:
+        id_agencia = user_agencia if user_rol == "admin_agencia" else None
     return await service.get_all(db, skip, limit, id_agencia=id_agencia)
 
 

@@ -113,8 +113,15 @@ class BoletoUpdate(BaseModel):
     estado: Optional[str] = None
     usado: Optional[bool] = None
     fecha_validacion: Optional[datetime] = Field(default=None, alias="fechaValidacion")
+    estado_checkin: Optional[str] = Field(default=None, alias="estadoCheckin")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class BoletoCheckIn(BaseModel):
+    estado_checkin: str = Field(alias="estadoCheckin")
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class BoletoOut(BaseModel):
@@ -131,5 +138,6 @@ class BoletoOut(BaseModel):
     precio_final: Decimal = Field(alias="precioFinal")
     fecha_emision: datetime = Field(alias="fechaEmision")
     estado: str
+    estado_checkin: str = Field(alias="estadoCheckin")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)

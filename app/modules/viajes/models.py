@@ -120,5 +120,8 @@ class Boleto(Base):
         nullable=False,
         default=EstadoBoleto.activo,
     )
+    estado_checkin: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pendiente"
+    )
     acepto_terminos_politicas: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     ip_registro: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)

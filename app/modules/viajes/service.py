@@ -33,6 +33,15 @@ async def get_viajes_by_bus(db: AsyncSession, id_bus: int, skip: int = 0, limit:
     return list(result.scalars().all())
 
 
+async def get_viajes_by_ruta(db: AsyncSession, id_ruta: int, skip: int = 0, limit: int = 100) -> list[Viaje]:
+    result = await db.execute(
+        select(Viaje)
+        .where(Viaje.id_ruta == id_ruta)
+        .offset(skip).limit(limit)
+    )
+    return list(result.scalars().all())
+
+
 async def get_viajes_by_agencia(db: AsyncSession, id_agencia: int, skip: int = 0, limit: int = 100) -> list[Viaje]:
     result = await db.execute(
         select(Viaje)
@@ -216,3 +225,11 @@ async def delete_boleto(db: AsyncSession, id_boleto: int) -> dict:
     await db.delete(boleto)
     await db.commit()
     return {"message": f"Boleto {id_boleto} eliminado"}
+
+
+async def update_boleto_checkin(db: AsyncSession, id_boleto: int, estado_checkin: str) -> Boleto:
+    boleto = await get_boleto_by_id(db, id_boleto)
+    boleto.estado_checkin = estado_checkin
+    await db.commit()
+    await db.refresh(boleto)
+    return boleto

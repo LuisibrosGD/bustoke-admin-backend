@@ -3,6 +3,7 @@ from fastapi import APIRouter, Query
 from app.dependencies import AdminOrSuper, DbDep
 from app.modules.viajes import service
 from app.modules.viajes.schemas import (
+    BoletoCheckIn,
     BoletoCreate,
     BoletoOut,
     BoletoUpdate,
@@ -27,9 +28,12 @@ async def list_viajes(
     limit: int = Query(100, ge=1, le=500),
     id_agencia: int | None = None,
     id_bus: int | None = None,
+    id_ruta: int | None = None,
 ):
     if id_bus is not None:
         return await service.get_viajes_by_bus(db, id_bus, skip, limit)
+    if id_ruta is not None:
+        return await service.get_viajes_by_ruta(db, id_ruta, skip, limit)
     user_agencia = current_user.get("id_agencia")
     user_rol = current_user.get("rol")
     if user_rol == "admin_agencia" and user_agencia:
@@ -94,6 +98,11 @@ async def update_boleto(id_boleto: int, body: BoletoUpdate, db: DbDep, _: AdminO
 @router.delete("/boletos/{id_boleto}")
 async def delete_boleto(id_boleto: int, db: DbDep, _: AdminOrSuper):
     return await service.delete_boleto(db, id_boleto)
+
+
+@router.put("/boletos/{id_boleto}/check-in", response_model=BoletoOut)
+async def checkin_boleto(id_boleto: int, body: BoletoCheckIn, db: DbDep, _: AdminOrSuper):
+    return await service.update_boleto_checkin(db, id_boleto, body.estado_checkin)
 
 
 # ── Pasajeros ─────────────────────────────────────────────────────────────────
