@@ -6,6 +6,7 @@ from app.modules.viajes.schemas import (
     BoletoCheckIn,
     BoletoCreate,
     BoletoOut,
+    BoletoScanRequest,
     BoletoUpdate,
     PasajeroCreate,
     PasajeroOut,
@@ -103,6 +104,11 @@ async def delete_boleto(id_boleto: int, db: DbDep, _: AdminOrSuper):
 @router.put("/boletos/{id_boleto}/check-in", response_model=BoletoOut)
 async def checkin_boleto(id_boleto: int, body: BoletoCheckIn, db: DbDep, _: AdminOrSuper):
     return await service.update_boleto_checkin(db, id_boleto, body.estado_checkin)
+
+
+@router.post("/{id_viaje}/check-in/scan", response_model=BoletoOut)
+async def scan_qr_checkin(id_viaje: int, body: BoletoScanRequest, db: DbDep, _: AdminOrSuper):
+    return await service.scan_boleto_by_qr(db, id_viaje, body.codigo_qr)
 
 
 # ── Pasajeros ─────────────────────────────────────────────────────────────────

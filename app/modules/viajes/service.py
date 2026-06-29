@@ -233,3 +233,18 @@ async def update_boleto_checkin(db: AsyncSession, id_boleto: int, estado_checkin
     await db.commit()
     await db.refresh(boleto)
     return boleto
+
+
+async def scan_boleto_by_qr(db: AsyncSession, id_viaje: int, codigo_qr: str) -> Boleto:
+    result = await db.execute(
+        select(Boleto).where(
+            Boleto.id_viaje == id_viaje,
+            Boleto.codigo_qr == codigo_qr,
+        )
+    )
+    boleto = result.scalar_one_or_none()
+    if not boleto:
+        raise NotFoundException(
+            f"No se encontró un boleto con ese código QR para el viaje {id_viaje}"
+        )
+    return boleto

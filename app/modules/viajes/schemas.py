@@ -124,6 +124,12 @@ class BoletoCheckIn(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class BoletoScanRequest(BaseModel):
+    codigo_qr: str = Field(alias="codigoQr")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class BoletoOut(BaseModel):
     id: int = Field(alias="id", validation_alias="id_boleto")
     id_viaje: int = Field(alias="idViaje")
