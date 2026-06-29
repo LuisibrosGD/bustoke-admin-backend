@@ -35,9 +35,16 @@ async def list_liquidaciones(
 
 
 @router.post("/admin/liquidaciones/generar", response_model=list[LiquidacionOut])
-async def generar_liquidaciones(body: GenerarLiquidacionRequest, db: DbDep, _: SuperAdmin):
+async def generar_liquidaciones(
+    body: GenerarLiquidacionRequest, db: DbDep, current_user: AdminOrSuper
+):
+    user_agencia = current_user.get("id_agencia")
+    user_rol = current_user.get("rol")
+    id_agencia = body.id_agencia
+    if user_rol == "admin_agencia" and user_agencia:
+        id_agencia = user_agencia
     return await service.generar_liquidaciones(
-        db, periodo=body.periodo, id_agencia=body.id_agencia
+        db, periodo=body.periodo, id_agencia=id_agencia
     )
 
 
