@@ -10,11 +10,15 @@ router = APIRouter(prefix="/admin/boletos", tags=["Boletos"])
 @router.get("/", response_model=list[BoletoOut])
 async def list_boletos(
     db: DbDep,
-    _: AdminOrSuper,
+    current_user: AdminOrSuper,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     id_agencia: int | None = None,
 ):
+    user_agencia = current_user.get("id_agencia")
+    user_rol = current_user.get("rol")
+    if not id_agencia and user_rol == "admin_agencia" and user_agencia:
+        id_agencia = user_agencia
     if id_agencia:
         return await viajes_service.get_boletos_by_agencia(db, id_agencia, skip, limit)
     return await viajes_service.get_all_boletos(db, skip, limit)
