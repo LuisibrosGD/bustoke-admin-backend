@@ -63,28 +63,41 @@ async def reporte_ventas(
 
     sql = text(f"""
         SELECT
-            TO_CHAR(b.fecha_emision, 'YYYY-MM') AS periodo,
-            b.canal,
-            COUNT(b.id_boleto)                  AS total_boletos,
-            SUM(b.precio_final)                 AS total_ventas
+            a.razon_social                                                AS agencia,
+            CONCAT(t_o.nombre, ' → ', t_d.nombre)                        AS ruta,
+            TO_CHAR(v.fecha_hora_salida, 'YYYY-MM')                       AS fecha_viaje,
+            COUNT(DISTINCT b.id_boleto)                                   AS total_boletos,
+            SUM(b.precio_final)                                           AS total_ventas,
+            COALESCE(
+                SUM(b.precio_final) * MAX(cc.porcentaje_comision) / 100,
+                0
+            )                                                              AS comision
         FROM boletos b
-        JOIN viajes v ON b.id_viaje = v.id_viaje
-        JOIN rutas r  ON v.id_ruta  = r.id_ruta
+        JOIN viajes v   ON b.id_viaje = v.id_viaje
+        JOIN rutas r    ON v.id_ruta  = r.id_ruta
+        JOIN terminales t_o ON r.id_terminal_origen = t_o.id_terminal
+        JOIN terminales t_d ON r.id_terminal_destino = t_d.id_terminal
         JOIN agencias a ON r.id_agencia = a.id_agencia
         LEFT JOIN pagos pg ON pg.id_boleto = b.id_boleto
+        LEFT JOIN configuracion_comisiones cc
+            ON cc.id_agencia = a.id_agencia
+           AND cc.fecha_inicio <= b.fecha_emision
+           AND (cc.fecha_fin IS NULL OR cc.fecha_fin >= b.fecha_emision)
         {where_clause}
-        GROUP BY periodo, b.canal
-        ORDER BY periodo DESC, b.canal
+        GROUP BY a.razon_social, ruta, fecha_viaje
+        ORDER BY fecha_viaje DESC, a.razon_social, ruta
     """)
 
     result = await db.execute(sql, params)
     rows = result.mappings().all()
     return [
         {
-            "periodo": row["periodo"],
-            "canal": row["canal"],
+            "agencia": row["agencia"],
+            "ruta": row["ruta"],
+            "fechaViaje": row["fecha_viaje"],
             "totalBoletos": int(row["total_boletos"]),
             "totalVentas": float(row["total_ventas"]),
+            "comision": float(row["comision"]),
         }
         for row in rows
     ]
@@ -95,6 +108,9 @@ async def reporte_viajes(
     id_agencia: Optional[int] = None,
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
+    id_ruta: Optional[str] = None,
+    id_bus: Optional[str] = None,
+    estado_viaje: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     filters = []
     params: dict[str, Any] = {}
@@ -108,6 +124,27 @@ async def reporte_viajes(
     if fecha_fin:
         filters.append("v.fecha_hora_salida <= :fecha_fin")
         params["fecha_fin"] = datetime.fromisoformat(fecha_fin)
+    if id_ruta:
+        ids = [x.strip() for x in id_ruta.split(",") if x.strip()]
+        if ids:
+            placeholders = ", ".join(f":ruta_{i}" for i in range(len(ids)))
+            filters.append(f"v.id_ruta IN ({placeholders})")
+            for i, val in enumerate(ids):
+                params[f"ruta_{i}"] = int(val)
+    if id_bus:
+        ids = [x.strip() for x in id_bus.split(",") if x.strip()]
+        if ids:
+            placeholders = ", ".join(f":bus_{i}" for i in range(len(ids)))
+            filters.append(f"v.id_bus IN ({placeholders})")
+            for i, val in enumerate(ids):
+                params[f"bus_{i}"] = int(val)
+    if estado_viaje:
+        ids = [x.strip() for x in estado_viaje.split(",") if x.strip()]
+        if ids:
+            placeholders = ", ".join(f":eviaje_{i}" for i in range(len(ids)))
+            filters.append(f"v.estado IN ({placeholders})")
+            for i, val in enumerate(ids):
+                params[f"eviaje_{i}"] = val
 
     where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
 
@@ -179,6 +216,70 @@ async def reporte_manifiesto_sutran(
             "asiento": row["asiento"],
             "emailContacto": row["email_contacto"],
             "precioFinal": float(row["precio_final"]),
+        }
+        for row in rows
+    ]
+
+
+async def reporte_financiero(
+    db: AsyncSession,
+    id_agencia: Optional[int] = None,
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    filters = []
+    params: dict[str, Any] = {}
+
+    if id_agencia:
+        filters.append("r.id_agencia = :id_agencia")
+        params["id_agencia"] = id_agencia
+    if fecha_inicio:
+        filters.append("b.fecha_emision >= :fecha_inicio")
+        params["fecha_inicio"] = datetime.fromisoformat(fecha_inicio)
+    if fecha_fin:
+        filters.append("b.fecha_emision <= :fecha_fin")
+        params["fecha_fin"] = datetime.fromisoformat(fecha_fin)
+
+    where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
+
+    sql = text(f"""
+        SELECT
+            a.razon_social                                    AS agencia,
+            TO_CHAR(b.fecha_emision, 'YYYY-MM')               AS periodo,
+            COUNT(DISTINCT b.id_boleto)                       AS total_boletos,
+            SUM(b.precio_final)                               AS total_ventas,
+            COALESCE(
+                SUM(b.precio_final) * MAX(cc.porcentaje_comision) / 100,
+                0
+            )                                                  AS comision,
+            COALESCE(
+                SUM(b.precio_final)
+                - SUM(b.precio_final) * MAX(cc.porcentaje_comision) / 100,
+                SUM(b.precio_final)
+            )                                                  AS neto_transferir
+        FROM boletos b
+        JOIN viajes v   ON b.id_viaje = v.id_viaje
+        JOIN rutas r    ON v.id_ruta  = r.id_ruta
+        JOIN agencias a ON r.id_agencia = a.id_agencia
+        LEFT JOIN configuracion_comisiones cc
+            ON cc.id_agencia = a.id_agencia
+           AND cc.fecha_inicio <= b.fecha_emision
+           AND (cc.fecha_fin IS NULL OR cc.fecha_fin >= b.fecha_emision)
+        {where_clause}
+        GROUP BY a.razon_social, periodo
+        ORDER BY periodo DESC, a.razon_social
+    """)
+
+    result = await db.execute(sql, params)
+    rows = result.mappings().all()
+    return [
+        {
+            "agencia": row["agencia"],
+            "periodo": row["periodo"],
+            "totalBoletos": int(row["total_boletos"]),
+            "totalVentas": float(row["total_ventas"]),
+            "comision": float(row["comision"]),
+            "netoTransferir": float(row["neto_transferir"]),
         }
         for row in rows
     ]
