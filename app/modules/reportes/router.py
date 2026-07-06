@@ -16,7 +16,7 @@ SLUGS = {"ventas", "viajes", "manifiesto-sutran"}
 async def get_reporte(
     slug: str,
     db: DbDep,
-    _: AdminOrSuper,
+    current_user: AdminOrSuper,
     id_agencia: Optional[int] = Query(None),
     id_ruta: Optional[str] = Query(None),
     id_viaje: Optional[int] = Query(None),
@@ -26,6 +26,10 @@ async def get_reporte(
     metodo_pago: Optional[str] = Query(None),
     canal_venta: Optional[str] = Query(None),
 ):
+    user_agencia = current_user.get("id_agencia")
+    user_rol = current_user.get("rol")
+    if not id_agencia and user_rol == "admin_agencia" and user_agencia:
+        id_agencia = user_agencia
     if slug == "ventas":
         data = await service.reporte_ventas(
             db, id_agencia, fecha_inicio, fecha_fin,
@@ -49,7 +53,7 @@ async def get_reporte(
 async def export_reporte_excel(
     slug: str,
     db: DbDep,
-    _: AdminOrSuper,
+    current_user: AdminOrSuper,
     id_agencia: Optional[int] = Query(None),
     id_ruta: Optional[str] = Query(None),
     id_viaje: Optional[int] = Query(None),
@@ -59,6 +63,10 @@ async def export_reporte_excel(
     metodo_pago: Optional[str] = Query(None),
     canal_venta: Optional[str] = Query(None),
 ):
+    user_agencia = current_user.get("id_agencia")
+    user_rol = current_user.get("rol")
+    if not id_agencia and user_rol == "admin_agencia" and user_agencia:
+        id_agencia = user_agencia
     if slug == "ventas":
         data = await service.reporte_ventas(
             db, id_agencia, fecha_inicio, fecha_fin,
