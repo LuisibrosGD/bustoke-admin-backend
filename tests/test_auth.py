@@ -101,15 +101,22 @@ class TestForgotPassword:
 class TestResetPassword:
 
     async def test_reset_password_success(self, client: AsyncClient):
-        login_resp = await login(client, SUPERADMIN_EMAIL, SUPERADMIN_PASS)
-        token = login_resp.json()["accessToken"]
-
-        resp = await client.post("/admin/auth/reset-password", json={"token": token, "newPassword": "NewPass123!"})
+        from app.core.security import create_access_token
+        reset_token = create_access_token(
+            {"sub": "5", "email": SUPERADMIN_EMAIL, "type": "password_reset"},
+        )
+        resp = await client.post("/admin/auth/reset-password", json={
+            "token": reset_token,
+            "newPassword": SUPERADMIN_PASS,
+        })
         assert resp.status_code == 200
         assert resp.json()["message"] == "Contraseña restablecida correctamente"
 
     async def test_reset_password_invalid_token(self, client: AsyncClient):
-        resp = await client.post("/admin/auth/reset-password", json={"token": "token-invalido", "newPassword": "NewPass123!"})
+        resp = await client.post("/admin/auth/reset-password", json={
+            "token": "token-invalido",
+            "newPassword": "NewPass123!",
+        })
         assert resp.status_code == 400
 
 
@@ -123,10 +130,15 @@ class TestRecoverEmail:
 
 class TestGetUsuario:
 
-    async def test_get_usuario_success(self, client: AsyncClient):
-        login_resp = await login(client, SUPERADMIN_EMAIL, SUPERADMIN_PASS)
-        token = login_resp.json()["accessToken"]
+    async def _login(self, client: AsyncClient) -> str:
+        resp = await client.post("/admin/auth/login", json={
+            "email": SUPERADMIN_EMAIL,
+            "password": SUPERADMIN_PASS,
+        })
+        return resp.json()["accessToken"]
 
+    async def test_get_usuario_success(self, client: AsyncClient):
+        token = await self._login(client)
         resp = await client.get("/admin/auth/usuarios/5", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         data = resp.json()
@@ -135,8 +147,6 @@ class TestGetUsuario:
         assert data["rol"] == "superadmin"
 
     async def test_get_usuario_not_found(self, client: AsyncClient):
-        login_resp = await login(client, SUPERADMIN_EMAIL, SUPERADMIN_PASS)
-        token = login_resp.json()["accessToken"]
-
+        token = await self._login(client)
         resp = await client.get("/admin/auth/usuarios/99999", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 404
