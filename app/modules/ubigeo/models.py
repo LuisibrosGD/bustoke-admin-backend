@@ -29,3 +29,11 @@ class Distrito(Base):
         Integer, ForeignKey("provincias.id_provincia"), nullable=False
     )
     nombre: Mapped[str] = mapped_column(String(100), nullable=False)
+
+
+class TipoDocumento(Base):
+    __tablename__ = "tipos_documento"
+
+    id_tipo_documento: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(100), nullable=False)
+    abreviatura: Mapped[str] = mapped_column(String(10), nullable=False)

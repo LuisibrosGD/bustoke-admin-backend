@@ -23,7 +23,7 @@ from app.modules.soporte.models import HistorialCambioSoporte, TicketSoporte  # 
 from app.modules.notificaciones.models import Notificacion  # noqa: F401
 from app.modules.reclamos.models import MensajeReclamo, Reclamo  # noqa: F401
 from app.modules.finanzas.models import LiquidacionAgencia, ApiKey  # noqa: F401
-from app.modules.ubigeo.models import Departamento, Provincia, Distrito  # noqa: F401
+from app.modules.ubigeo.models import Departamento, Provincia, Distrito, TipoDocumento  # noqa: F401
 from app.modules.agencias_terminales.models import AgenciaTerminal  # noqa: F401
 from app.modules.choferes.models import Chofer  # noqa: F401
 
