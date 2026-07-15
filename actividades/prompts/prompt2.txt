@@ -1,0 +1,8 @@
+Prompt Maestro 2: Generación de la Suite Automatizada (Unidad III)Objetivo: Crear los scripts reales de automatización para la interfaz o las APIs.
+Nota: Modifica [Cypress / Playwright / Postman] según lo que hayan elegido usar en el grupo.  PlaintextActúa como un SDET (Software Development Engineer in Test). Con base en el código fuente de mi proyecto, necesito que escribas una suite de pruebas automatizadas funcional y lista para ejecutar utilizando [Cypress / Playwright / Postman]. 
+
+Por favor, genera el código estructurado y limpio para los siguientes escenarios:
+1. Pruebas de API (Integration/E2E): Automatiza las pruebas de los endpoints principales (mínimo un flujo completo de las peticiones HTTP: GET, POST, PUT, DELETE, incluyendo validaciones de Status Code y estructura del JSON de respuesta).
+2. Pruebas de Interfaz (UI): Automatiza un flujo crítico de usuario (ej. flujo feliz de autenticación o creación de un recurso), usando selectores CSS/XPath óptimos que correspondan exactamente a los elementos HTML de nuestras vistas actuales.
+
+Proporcióname el código completo de los archivos listos para guardar (ej. api.spec.js o auth.cy.js), incluyendo comentarios breves que expliquen las aserciones clave.

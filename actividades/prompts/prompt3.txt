@@ -1,0 +1,15 @@
+Prompt Maestro 3: Configuración del Pipeline CI/CD (Unidad III)Objetivo: Integrar la suite automatizada en un flujo de integración continua, lo cual sube muchos puntos en la rúbrica.  PlaintextActúa como un Ingeniero DevOps / DevSecOps. Necesito integrar la suite de pruebas automatizadas que acabamos de definir en un flujo de Integración Continua (CI/CD) utilizando GitHub Actions. 
+
+Por favor, escribe el archivo de configuración .github/workflows/test-automation.yml completo que realice las siguientes acciones en cada 'push' o 'pull_request' a la rama principal:
+1. Levantar el entorno necesario (instalar dependencias de Node.js/Python, configurar variables de entorno esenciales).
+2. Levantar la aplicación o servicios en background (si aplica).
+3. Ejecutar de forma automática la suite de pruebas que definimos en el paso anterior (especifica el comando de ejecución).
+4. Exportar o guardar los reportes de resultados de las pruebas como artefactos del workflow.
+
+Asegúrate de que la sintaxis sea completamente válida para GitHub Actions y esté optimizada para un proyecto que usa la arquitectura actual de nuestro repositorio.
+🔒 Prompt Maestro 4: Análisis Inicial de Seguridad (Unidad IV)Objetivo: Ganar los puntos de análisis de vulnerabilidades bajo estándares como OWASP.  PlaintextActúa como un Auditor de Seguridad de Software y especialista en DevSecOps. Analiza la estructura de mi proyecto, las dependencias declaradas (ej. package.json o requirements.txt) y las prácticas de manejo de datos visibles en el código.
+
+Identifica y redacta un reporte con:
+1. Al menos 2 riesgos potenciales de seguridad basados en el OWASP Top 10 que podrían afectar a nuestra arquitectura específica (ej. Inyección SQL, Broken Authentication, exposición de datos sensibles).
+2. Una explicación de en qué parte del código actual somos vulnerables o qué falta implementar para mitigar el riesgo.
+3. El fragmento de código corregido o la configuración recomendada para solucionar la vulnerabilidad

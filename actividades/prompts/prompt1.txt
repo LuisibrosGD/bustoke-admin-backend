@@ -1,0 +1,18 @@
+Prompt Maestro 1: Diseño Automatizado de Casos de Prueba (Unidad II)Objetivo: Cumplir con el diseño riguroso de la matriz de pruebas.  PlaintextActúa como un Ingeniero de QA Senior y Especialista en Testing. Analiza el código actual de mi proyecto alojado en este entorno y genera una matriz detallada de Casos de Prueba en formato de tabla Markdown, asegurando la alineación con los estándares ISTQB e ISO/IEC 29119.
+
+Por favor, incluye los siguientes enfoques de diseño obligatorios:
+1. Pruebas de Caja Negra (Partición de equivalencia y análisis de valores límite) enfocadas en los flujos principales de la aplicación (ej. registro, login, operaciones clave).
+2. Pruebas de Caja Blanca (identifica un componente o función crítica del backend/frontend para proponer cobertura de caminos o decisiones).
+3. Pruebas basadas en Riesgos (identifica 2 riesgos críticos de negocio y diseña su caso de prueba correspondiente).
+
+La tabla final debe contener las siguientes columnas obligatorias:
+- ID Caso
+- Componente/Módulo
+- Tipo de Prueba (Caja Negra / Caja Blanca / Basada en Riesgo)
+- Descripción del Caso
+- Precondiciones
+- Datos de Entrada (Inputs reales basados en nuestro modelo/código)
+- Pasos de Ejecución
+- Resultado Esperado
+
+Analiza detalladamente las rutas, controladores y vistas del proyecto antes de redactar para que los datos de entrada sean 100% coherentes con lo que ya está programado.
