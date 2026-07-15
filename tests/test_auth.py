@@ -1,7 +1,6 @@
-import pytest
 from httpx import AsyncClient
 
-pytestmark = pytest.mark.asyncio
+pytestmark = __import__("pytest").mark.asyncio
 
 SUPERADMIN_EMAIL = "sebastian.admin@bustoke.pe"
 SUPERADMIN_PASS = "TempPassword123!5"

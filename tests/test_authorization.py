@@ -1,17 +1,13 @@
-import pytest
+from time import time
+
 from httpx import AsyncClient
 
-pytestmark = pytest.mark.asyncio
+pytestmark = __import__("pytest").mark.asyncio
 
 SUPERADMIN_EMAIL = "sebastian.admin@bustoke.pe"
 SUPERADMIN_PASS = "TempPassword123!5"
 ADMIN_EMAIL = "admin.cruz@cruzdelsur.com.pe"
 ADMIN_PASS = "TempPassword123!1"
-
-
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
 
 
 class TestNoToken:
@@ -71,5 +67,9 @@ class TestSuperadminAccess:
 
     async def test_superadmin_can_create_agencia(self, client: AsyncClient):
         data = (await client.post("/admin/auth/login", json={"email": SUPERADMIN_EMAIL, "password": SUPERADMIN_PASS})).json()
-        resp = await client.post("/admin/agencias/", json={"ruc": "20988888888", "razonSocial": "SAdminTest"}, headers={"Authorization": f"Bearer {data['accessToken']}"})
+        token = data["accessToken"]
+        ruc = f"209{int(time() * 1000) % 100_000_000:08d}"
+        resp = await client.post("/admin/agencias/", json={"ruc": ruc, "razonSocial": "SAdminTest"}, headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 201
+        created_id = resp.json()["id"]
+        await client.delete(f"/admin/agencias/{created_id}", headers={"Authorization": f"Bearer {token}"})

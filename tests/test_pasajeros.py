@@ -1,15 +1,15 @@
-import pytest
+from time import time
+
 from httpx import AsyncClient
 
-pytestmark = pytest.mark.asyncio
+pytestmark = __import__("pytest").mark.asyncio
 
 SUPERADMIN_EMAIL = "sebastian.admin@bustoke.pe"
 SUPERADMIN_PASS = "TempPassword123!5"
 
 
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
+def _unique_doc() -> str:
+    return f"P{int(time() * 1_000_000) % 10_000_000_000}"
 
 
 async def _login(client: AsyncClient) -> str:
@@ -26,11 +26,12 @@ async def _create_pasajero(client: AsyncClient, token: str, doc: str) -> dict:
 class TestCreatePasajero:
 
     async def test_create_pasajero(self, client: AsyncClient):
+        doc = _unique_doc()
         token = await _login(client)
-        data = await _create_pasajero(client, token, "99999999")
+        data = await _create_pasajero(client, token, doc)
         assert data.get("id")
         assert data["nombres"] == "Test"
-        assert data["numeroDocumento"] == "99999999"
+        assert data["numeroDocumento"] == doc
 
 
 class TestListPasajeros:
@@ -52,7 +53,7 @@ class TestGetPasajero:
 
     async def test_get_pasajero_by_id(self, client: AsyncClient):
         token = await _login(client)
-        created = await _create_pasajero(client, token, "88888888")
+        created = await _create_pasajero(client, token, _unique_doc())
         resp = await client.get(f"/admin/viajes/pasajeros/{created['id']}", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         assert resp.json()["id"] == created["id"]
@@ -67,7 +68,7 @@ class TestUpdatePasajero:
 
     async def test_update_pasajero(self, client: AsyncClient):
         token = await _login(client)
-        created = await _create_pasajero(client, token, "77777777")
+        created = await _create_pasajero(client, token, _unique_doc())
         resp = await client.put(f"/admin/viajes/pasajeros/{created['id']}", json={"nombres": "Updated"}, headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         assert resp.json()["nombres"] == "Updated"
@@ -77,6 +78,6 @@ class TestDeletePasajero:
 
     async def test_delete_pasajero(self, client: AsyncClient):
         token = await _login(client)
-        created = await _create_pasajero(client, token, "66666666")
+        created = await _create_pasajero(client, token, _unique_doc())
         resp = await client.delete(f"/admin/viajes/pasajeros/{created['id']}", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200

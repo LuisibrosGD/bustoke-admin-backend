@@ -1,15 +1,15 @@
-import pytest
+from time import time
+
 from httpx import AsyncClient
 
-pytestmark = pytest.mark.asyncio
+pytestmark = __import__("pytest").mark.asyncio
 
 SUPERADMIN_EMAIL = "sebastian.admin@bustoke.pe"
 SUPERADMIN_PASS = "TempPassword123!5"
 
 
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
+def _unique_doc() -> str:
+    return f"B{int(time() * 1_000_000) % 10_000_000_000}"
 
 
 async def _login(client: AsyncClient) -> str:
@@ -29,13 +29,28 @@ async def _create_pasajero(client: AsyncClient, token: str, doc: str) -> int:
     return resp.json()["id"]
 
 
+_asiento_counter = 0
+
+
+async def _create_asiento(client: AsyncClient, token: str, bus_id: int = 1) -> int:
+    global _asiento_counter
+    _asiento_counter += 1
+    n = _asiento_counter
+    ts = int(time() * 1000) % 100_000
+    body = {"idBus": bus_id, "numeroAsiento": f"A1-{ts}_{n}", "fila": "A", "piso": 1, "tipoServicio": "normal", "coordX": n, "coordY": n}
+    resp = await client.post("/admin/flota/asientos", json=body, headers={"Authorization": f"Bearer {token}"})
+    return resp.json()["id"]
+
+
 class TestCreateBoleto:
 
     async def test_create_boleto(self, client: AsyncClient):
         token = await _login(client)
         viaje_id = await _create_viaje(client, token, "08:00:00")
-        pasajero_id = await _create_pasajero(client, token, "55000001")
-        body = {"idViaje": viaje_id, "idPasajero": pasajero_id, "idAsiento": 1, "emailContacto": "a@b.com", "canal": "web", "codigoQr": f"QR-B1-{viaje_id}", "precioFinal": 50}
+        asiento_id = await _create_asiento(client, token)
+        doc = _unique_doc()
+        pasajero_id = await _create_pasajero(client, token, doc)
+        body = {"idViaje": viaje_id, "idPasajero": pasajero_id, "idAsiento": asiento_id, "emailContacto": "a@b.com", "canal": "ventanilla_fisica", "codigoQr": f"QR-B1-{viaje_id}", "precioFinal": 50}
         resp = await client.post("/admin/viajes/boletos", json=body, headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 201
         assert resp.json()["id"]
@@ -63,8 +78,10 @@ class TestCheckIn:
     async def test_checkin_boleto(self, client: AsyncClient):
         token = await _login(client)
         viaje_id = await _create_viaje(client, token, "09:00:00")
-        pasajero_id = await _create_pasajero(client, token, "55000002")
-        body = {"idViaje": viaje_id, "idPasajero": pasajero_id, "idAsiento": 1, "emailContacto": "ck@b.com", "canal": "web", "codigoQr": f"QR-CK-{viaje_id}", "precioFinal": 35}
+        asiento_id = await _create_asiento(client, token)
+        doc = _unique_doc()
+        pasajero_id = await _create_pasajero(client, token, doc)
+        body = {"idViaje": viaje_id, "idPasajero": pasajero_id, "idAsiento": asiento_id, "emailContacto": "ck@b.com", "canal": "ventanilla_fisica", "codigoQr": f"QR-CK-{viaje_id}", "precioFinal": 35}
         created = (await client.post("/admin/viajes/boletos", json=body, headers={"Authorization": f"Bearer {token}"})).json()
         resp = await client.put(f"/admin/viajes/boletos/{created['id']}/check-in", json={"estadoCheckin": "realizado"}, headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
@@ -76,8 +93,10 @@ class TestScanQR:
     async def test_scan_qr_success(self, client: AsyncClient):
         token = await _login(client)
         viaje_id = await _create_viaje(client, token, "10:00:00")
-        pasajero_id = await _create_pasajero(client, token, "55000003")
-        body = {"idViaje": viaje_id, "idPasajero": pasajero_id, "idAsiento": 1, "emailContacto": "qr@b.com", "canal": "web", "codigoQr": f"QR-SC-{viaje_id}", "precioFinal": 45}
+        asiento_id = await _create_asiento(client, token)
+        doc = _unique_doc()
+        pasajero_id = await _create_pasajero(client, token, doc)
+        body = {"idViaje": viaje_id, "idPasajero": pasajero_id, "idAsiento": asiento_id, "emailContacto": "qr@b.com", "canal": "ventanilla_fisica", "codigoQr": f"QR-SC-{viaje_id}", "precioFinal": 45}
         await client.post("/admin/viajes/boletos", json=body, headers={"Authorization": f"Bearer {token}"})
         resp = await client.post(f"/admin/viajes/{viaje_id}/check-in/scan", json={"codigoQr": f"QR-SC-{viaje_id}"}, headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200

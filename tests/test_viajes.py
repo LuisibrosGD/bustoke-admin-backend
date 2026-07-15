@@ -1,15 +1,9 @@
-import pytest
 from httpx import AsyncClient
 
-pytestmark = pytest.mark.asyncio
+pytestmark = __import__("pytest").mark.asyncio
 
 SUPERADMIN_EMAIL = "sebastian.admin@bustoke.pe"
 SUPERADMIN_PASS = "TempPassword123!5"
-
-
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
 
 
 async def _login(client: AsyncClient) -> str:
