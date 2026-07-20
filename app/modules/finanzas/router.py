@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 
-from app.dependencies import AdminOrSuper, DbDep, SuperAdmin
+from app.dependencies import AdminOrSuper, DbDep, SuperAdmin, resolve_agencia_scope
 from app.modules.finanzas import service
 from app.modules.finanzas.schemas import (
     ApiKeyCreate,
@@ -25,10 +25,7 @@ async def list_liquidaciones(
     limit: int = Query(100, ge=1, le=500),
     id_agencia: int | None = None,
 ):
-    user_agencia = current_user.get("id_agencia")
-    user_rol = current_user.get("rol")
-    if user_rol == "admin_agencia" and user_agencia:
-        return await service.get_liquidaciones_by_agencia(db, user_agencia)
+    id_agencia = resolve_agencia_scope(current_user, id_agencia)
     if id_agencia:
         return await service.get_liquidaciones_by_agencia(db, id_agencia)
     return await service.get_all_liquidaciones(db, skip, limit)
@@ -38,11 +35,7 @@ async def list_liquidaciones(
 async def generar_liquidaciones(
     body: GenerarLiquidacionRequest, db: DbDep, current_user: AdminOrSuper
 ):
-    user_agencia = current_user.get("id_agencia")
-    user_rol = current_user.get("rol")
-    id_agencia = body.id_agencia
-    if user_rol == "admin_agencia" and user_agencia:
-        id_agencia = user_agencia
+    id_agencia = resolve_agencia_scope(current_user, body.id_agencia)
     return await service.generar_liquidaciones(
         db, periodo=body.periodo, id_agencia=id_agencia
     )
@@ -80,10 +73,7 @@ async def list_api_keys(
     limit: int = Query(100, ge=1, le=500),
     id_agencia: int | None = None,
 ):
-    user_agencia = current_user.get("id_agencia")
-    user_rol = current_user.get("rol")
-    if user_rol == "admin_agencia" and user_agencia:
-        return await service.get_api_keys_by_agencia(db, user_agencia)
+    id_agencia = resolve_agencia_scope(current_user, id_agencia)
     if id_agencia:
         return await service.get_api_keys_by_agencia(db, id_agencia)
     return await service.get_all_api_keys(db, skip, limit)
