@@ -36,16 +36,20 @@ bustoke-admin-backend/
     ├── dependencies.py         # Dependencias: auth, roles, API Key
     ├── core/
     │   ├── security.py         # JWT create/decode, bcrypt hash/verify
-    │   └── exceptions.py       # Excepciones HTTP personalizadas
+    │   ├── exceptions.py       # Excepciones HTTP personalizadas
+    │   ├── excel.py            # Lectura/escritura de Excel (plantillas + carga masiva)
+    │   ├── logging.py          # Logging estructurado de requests (middleware)
+    │   └── rate_limit.py       # Rate limiting en memoria (login por email)
     └── modules/
-        ├── auth/               # Login, refresh, forgot/reset password + usuarios
+        ├── auth/               # Login, refresh, forgot/reset password
+        ├── usuarios/           # Gestión de usuarios admin (crear/editar/desactivar)
         ├── agencias/           # CRUD agencias
         ├── agencias_terminales/# Pivot agencia-terminal
-        ├── flota/              # CRUD buses + asientos
-        ├── rutas/              # CRUD rutas + tarifas_ruta
+        ├── flota/              # CRUD buses + asientos + carga masiva
+        ├── rutas/              # CRUD rutas + tarifas_ruta + carga masiva
         ├── viajes/             # CRUD viajes + boletos + pasajeros
         ├── terminales/         # CRUD terminales
-        ├── choferes/           # CRUD choferes
+        ├── choferes/           # CRUD choferes + carga masiva
         ├── boletos/            # CRUD boletos (global)
         ├── pasajeros/          # CRUD pasajeros (global)
         ├── suscripciones/      # CRUD planes + suscripciones
@@ -124,11 +128,24 @@ docker run -p 5000:5000 --env-file .env bustoke-admin-backend
 | POST | `/admin/auth/recover-email` | Recuperar email de cuenta | — |
 | GET | `/admin/auth/usuarios/{id}` | Obtener datos de un usuario por ID | AdminOrSuper |
 
+> `POST /admin/auth/login` aplica **rate limiting por email** (10 intentos/minuto) para frenar fuerza bruta.
+
+### Usuarios (`/admin/usuarios`)
+
+Gestión de usuarios administradores. Un `superadmin` puede crear cualquier rol; un `admin_agencia` solo puede crear `admin_terminal` dentro de su propia agencia. Al crear, se devuelve **una sola vez** una contraseña temporal. El `DELETE` es un soft-delete (`activo=false`).
+
+| Método | Ruta | Descripción | Auth |
+|--------|------|-------------|------|
+| GET | `/admin/usuarios/` | Listar usuarios admin (admin_agencia ve solo los suyos) | AdminOrSuper |
+| POST | `/admin/usuarios/` | Crear usuario (devuelve contraseña temporal) | AdminOrSuper |
+| PUT | `/admin/usuarios/{id}` | Actualizar usuario (teléfono, activo, terminal) | AdminOrSuper |
+| DELETE | `/admin/usuarios/{id}` | Desactivar usuario (soft-delete) | AdminOrSuper |
+
 ### Dashboard (`/admin/dashboard`)
 
 | Método | Ruta | Descripción | Auth |
 |--------|------|-------------|------|
-| GET | `/admin/dashboard/` | Resumen de dashboard (filtrado por agencia si admin_agencia) | AdminOrSuper |
+| GET | `/admin/dashboard/` | Resumen personalizado por rol (KPIs, gráficos, alertas; scopeado a agencia o terminal) | AdminOrSuperOrTerminal |
 
 ### Agencias (`/admin/agencias`)
 
@@ -158,6 +175,8 @@ docker run -p 5000:5000 --env-file .env bustoke-admin-backend
 | POST | `/admin/flota/buses` | Crear bus | AdminOrSuper |
 | PUT | `/admin/flota/buses/{id}` | Actualizar bus | AdminOrSuper |
 | DELETE | `/admin/flota/buses/{id}` | Eliminar bus | AdminOrSuper |
+| POST | `/admin/flota/buses/carga-masiva` | Carga masiva de buses desde Excel | AdminOrSuper |
+| GET | `/admin/flota/buses/carga-masiva/plantilla` | Descargar plantilla Excel de buses | AdminOrSuper |
 
 ### Flota — Asientos (`/admin/flota/asientos`)
 
@@ -178,6 +197,8 @@ docker run -p 5000:5000 --env-file .env bustoke-admin-backend
 | POST | `/admin/rutas/` | Crear ruta | AdminOrSuper |
 | PUT | `/admin/rutas/{id}` | Actualizar ruta | AdminOrSuper |
 | DELETE | `/admin/rutas/{id}` | Eliminar ruta | AdminOrSuper |
+| POST | `/admin/rutas/carga-masiva` | Carga masiva de rutas desde Excel | AdminOrSuper |
+| GET | `/admin/rutas/carga-masiva/plantilla` | Descargar plantilla Excel de rutas | AdminOrSuper |
 | GET | `/admin/rutas/{id}/tarifas` | Listar tarifas de una ruta | AdminOrSuper |
 | GET | `/admin/rutas/tarifas/{id}` | Obtener tarifa por ID | AdminOrSuper |
 | POST | `/admin/rutas/tarifas` | Crear tarifa | AdminOrSuper |
@@ -235,6 +256,8 @@ docker run -p 5000:5000 --env-file .env bustoke-admin-backend
 | POST | `/admin/choferes/` | Crear chofer | AdminOrSuper |
 | PUT | `/admin/choferes/{id}` | Actualizar chofer | AdminOrSuper |
 | DELETE | `/admin/choferes/{id}` | Eliminar chofer | AdminOrSuper |
+| POST | `/admin/choferes/carga-masiva` | Carga masiva de choferes desde Excel | AdminOrSuper |
+| GET | `/admin/choferes/carga-masiva/plantilla` | Descargar plantilla Excel de choferes | AdminOrSuper |
 
 ### Suscripciones — Planes (`/admin/planes`)
 
@@ -345,9 +368,10 @@ docker run -p 5000:5000 --env-file .env bustoke-admin-backend
 
 | Método | Ruta | Descripción | Auth |
 |--------|------|-------------|------|
-| GET | `/admin/ubigeo/departamentos` | Listar departamentos | AdminOrSuper |
-| GET | `/admin/ubigeo/provincias` | Provincias (filtrable por `id_departamento`) | AdminOrSuper |
-| GET | `/admin/ubigeo/distritos` | Distritos (filtrable por `id_provincia`) | AdminOrSuper |
+| GET | `/admin/ubigeo/departamentos` | Listar departamentos | — |
+| GET | `/admin/ubigeo/provincias` | Provincias (filtrable por `id_departamento`) | — |
+| GET | `/admin/ubigeo/distritos` | Distritos (filtrable por `id_provincia`) | — |
+| GET | `/admin/ubigeo/tipos-documento` | Listar tipos de documento (DNI, Pasaporte, etc.) | — |
 
 ### Endpoints Públicos (`/api/v1`)
 
@@ -360,25 +384,31 @@ docker run -p 5000:5000 --env-file .env bustoke-admin-backend
 
 | Rol | Acceso |
 |-----|--------|
-| `superadmin` | Todos los endpoints admin. Crear/editar/eliminar agencias, planes, API keys. |
-| `admin_agencia` | CRUD de su propia agencia (buses, rutas, viajes, etc.). Solo lectura de su agencia. |
+| `superadmin` | Todos los endpoints admin. Crear/editar/eliminar agencias, planes, API keys, usuarios de cualquier rol. |
+| `admin_agencia` | CRUD dentro de su propia agencia (buses, rutas, viajes, etc.). Puede crear encargados de terminal. |
+| `admin_terminal` | Solo **lectura** scopeada a su terminal: viajes, boletos, pasajeros, rutas, terminales, dashboard y manifiestos cuyo terminal (origen o destino) es el suyo. Puede hacer check-in/actualizar boletos, pero no crear/eliminar viajes ni acceder a finanzas, reclamos, soporte, flota, agencias, etc. |
 | `cliente` | No tiene acceso a endpoints admin. |
 
 Las dependencias de autorización se definen en `app/dependencies.py`:
 
 - `Bearer` — Token JWT válido
 - `AdminOrSuper` — Requiere rol `admin_agencia` o `superadmin`
+- `AdminOrSuperOrTerminal` — Requiere `admin_agencia`, `superadmin` o `admin_terminal` (usado en los endpoints de lectura scopeables por terminal)
 - `SuperAdmin` — Requiere rol `superadmin`
 - `ApiKeyAuth` — Autenticación vía header `x-api-key`
 
+El scope se resuelve con dos helpers en `app/dependencies.py`:
+- `resolve_agencia_scope(current_user, id_agencia)` — fuerza la agencia del usuario si es `admin_agencia`/`admin_terminal`.
+- `resolve_terminal_scope(current_user, id_terminal)` — fuerza el terminal del usuario si es `admin_terminal`. El filtro por terminal se aplica siempre sobre la ruta (`terminal_ruta_condition`: origen **o** destino).
+
 ## Autenticación
 
-1. **Login**: `POST /admin/auth/login` → devuelve `accessToken`, `refreshToken`, `rol`, `idUsuario`, `idAgencia`
+1. **Login**: `POST /admin/auth/login` → devuelve `accessToken`, `refreshToken`, `rol`, `idUsuario`, `idAgencia`, `idTerminal`
 2. **Uso**: Enviar `Authorization: Bearer <accessToken>` en cada request
 3. **Refresh**: `POST /admin/auth/refresh` con `refreshToken` en el body
 4. **Logout**: Cliente elimina el token localmente
 
-El JWT contiene: `sub` (id_usuario), `email`, `rol`, `id_agencia`.
+El JWT contiene: `sub` (id_usuario), `email`, `rol`, `id_agencia`, `id_terminal`.
 
 ## API Key (para endpoints públicos)
 
@@ -403,6 +433,24 @@ Todos los schemas de respuesta y request usan alias **camelCase** para compatibi
 
 - **Swagger UI**: http://localhost:5000/docs
 - **ReDoc**: http://localhost:5000/redoc
+
+## Observabilidad y seguridad
+
+- **Logging estructurado** (`app/core/logging.py`): un middleware registra cada request con método, ruta, código de estado, duración en ms e IP. Los 5xx se registran como ERROR.
+- **Rate limiting** (`app/core/rate_limit.py`): el login se limita a 10 intentos por minuto **por email** (no por IP, ya que el frontend pasa por un proxy BFF que enmascara la IP real). Es un limitador en memoria por proceso; para un despliegue multi-instancia debería respaldarse en Redis.
+
+## Carga masiva desde Excel
+
+Rutas, Flota y Choferes exponen `POST .../carga-masiva` (subir un `.xlsx`) y `GET .../carga-masiva/plantilla` (descargar el formato oficial con una fila de ejemplo). La respuesta reporta `successCount`, `skippedCount` (duplicados) y `errors` con el número de fila y el motivo. La lógica de lectura/escritura de Excel vive en `app/core/excel.py`.
+
+## Tests
+
+```bash
+pytest                      # toda la suite
+pytest tests/test_auth.py   # un archivo
+```
+
+Los tests usan `httpx.AsyncClient` contra la app y la base de datos configurada en `DATABASE_URL`. El fixture `conftest.py` limpia el estado del rate limiter entre tests.
 
 ## Migraciones con Alembic
 
