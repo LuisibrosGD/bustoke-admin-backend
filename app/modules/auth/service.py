@@ -32,6 +32,7 @@ def build_token_response(user: Usuario) -> dict:
         "email": user.email,
         "rol": user.rol.value,
         "id_agencia": user.id_agencia,
+        "id_terminal": user.id_terminal,
     }
     access_token = create_access_token(payload)
     refresh_token = create_refresh_token(payload)
@@ -42,6 +43,7 @@ def build_token_response(user: Usuario) -> dict:
         "rol": user.rol.value,
         "idUsuario": user.id_usuario,
         "idAgencia": user.id_agencia,
+        "idTerminal": user.id_terminal,
     }
 
 

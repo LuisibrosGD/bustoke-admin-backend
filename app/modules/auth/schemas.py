@@ -18,6 +18,7 @@ class TokenResponse(BaseModel):
     rol: str
     id_usuario: int = Field(alias="idUsuario")
     id_agencia: Optional[int] = Field(default=None, alias="idAgencia")
+    id_terminal: Optional[int] = Field(default=None, alias="idTerminal")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -55,6 +56,7 @@ class UserOut(BaseModel):
     email: str
     rol: str
     id_agencia: Optional[int] = Field(default=None, alias="idAgencia")
+    id_terminal: Optional[int] = Field(default=None, alias="idTerminal")
     activo: bool
     fecha_creacion: datetime = Field(alias="fechaCreacion")
 

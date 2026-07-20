@@ -13,6 +13,7 @@ async def get_all(
     skip: int = 0,
     limit: int = 200,
     id_agencia: int | None = None,
+    id_terminal: int | None = None,
 ) -> list[Terminal]:
     query = select(Terminal)
     if id_agencia is not None:
@@ -21,6 +22,8 @@ async def get_all(
             .join(AgenciaTerminal, AgenciaTerminal.id_terminal == Terminal.id_terminal)
             .where(AgenciaTerminal.id_agencia == id_agencia)
         )
+    if id_terminal is not None:
+        query = query.where(Terminal.id_terminal == id_terminal)
     query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     return list(result.scalars().all())

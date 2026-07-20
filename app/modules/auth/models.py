@@ -11,6 +11,7 @@ from app.database import Base
 class RolUsuario(str, enum.Enum):
     cliente = "cliente"
     admin_agencia = "admin_agencia"
+    admin_terminal = "admin_terminal"
     superadmin = "superadmin"
 
 
@@ -28,6 +29,9 @@ class Usuario(Base):
     )
     id_agencia: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("agencias.id_agencia"), nullable=True
+    )
+    id_terminal: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("terminales.id_terminal"), nullable=True
     )
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     fecha_creacion: Mapped[datetime] = mapped_column(

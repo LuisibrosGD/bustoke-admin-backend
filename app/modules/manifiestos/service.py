@@ -1,16 +1,38 @@
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.manifiestos.models import ManifiestoSutran
 from app.modules.manifiestos.schemas import ManifiestoDetalleOut
+from app.modules.rutas.models import Ruta
+from app.modules.viajes.models import Viaje
 
 
-async def get_all(db: AsyncSession, skip: int = 0, limit: int = 200) -> list[ManifiestoSutran]:
-    result = await db.execute(select(ManifiestoSutran).offset(skip).limit(limit).order_by(ManifiestoSutran.fecha_generacion.desc()))
+async def get_all(
+    db: AsyncSession,
+    skip: int = 0,
+    limit: int = 200,
+    id_agencia: int | None = None,
+    id_terminal: int | None = None,
+) -> list[ManifiestoSutran]:
+    query = select(ManifiestoSutran)
+    if id_agencia or id_terminal:
+        query = query.join(Viaje, Viaje.id_viaje == ManifiestoSutran.id_viaje).join(
+            Ruta, Ruta.id_ruta == Viaje.id_ruta
+        )
+        if id_agencia:
+            query = query.where(Ruta.id_agencia == id_agencia)
+        if id_terminal:
+            query = query.where(
+                or_(Ruta.id_terminal_origen == id_terminal, Ruta.id_terminal_destino == id_terminal)
+            )
+    query = query.offset(skip).limit(limit).order_by(ManifiestoSutran.fecha_generacion.desc())
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 
-async def get_by_id(db: AsyncSession, id_manifiesto: int) -> ManifiestoDetalleOut | None:
+async def get_by_id(
+    db: AsyncSession, id_manifiesto: int, id_agencia: int | None = None, id_terminal: int | None = None
+) -> ManifiestoDetalleOut | None:
     sql = text("""
         SELECT
             m.id_manifiesto,
@@ -32,8 +54,12 @@ async def get_by_id(db: AsyncSession, id_manifiesto: int) -> ManifiestoDetalleOu
         JOIN terminales tor  ON r.id_terminal_origen  = tor.id_terminal
         JOIN terminales tdes ON r.id_terminal_destino = tdes.id_terminal
         WHERE m.id_manifiesto = :id
+          AND (:id_agencia IS NULL OR b.id_agencia = :id_agencia)
+          AND (:id_terminal IS NULL OR r.id_terminal_origen = :id_terminal OR r.id_terminal_destino = :id_terminal)
     """)
-    result = await db.execute(sql, {"id": id_manifiesto})
+    result = await db.execute(
+        sql, {"id": id_manifiesto, "id_agencia": id_agencia, "id_terminal": id_terminal}
+    )
     row = result.mappings().one_or_none()
     if not row:
         return None
