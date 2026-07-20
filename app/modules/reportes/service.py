@@ -1,4 +1,3 @@
-import io
 from datetime import datetime
 from typing import Any, Optional
 
@@ -6,6 +5,44 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestException, NotFoundException
+from app.core.excel import export_excel  # noqa: F401 (reexportado para reportes/router.py)
+
+# Fragmento de comisión reutilizado por reporte_ventas y reporte_financiero:
+# ambos calculan la comisión vigente de la agencia a la fecha de emisión del boleto.
+_COMISION_JOIN = """
+    LEFT JOIN configuracion_comisiones cc
+        ON cc.id_agencia = a.id_agencia
+       AND cc.fecha_inicio <= b.fecha_emision
+       AND (cc.fecha_fin IS NULL OR cc.fecha_fin >= b.fecha_emision)
+"""
+_COMISION_EXPR = "COALESCE(SUM(b.precio_final) * MAX(cc.porcentaje_comision) / 100, 0)"
+
+
+async def _fetch_paginated(
+    db: AsyncSession,
+    base_query_sql: str,
+    order_by_sql: str,
+    params: dict[str, Any],
+    page: int,
+    limit: int,
+):
+    """Ejecuta `base_query_sql` (un SELECT sin ORDER BY/LIMIT) paginado con
+    LIMIT/OFFSET, devolviendo también el total de filas sin paginar (vía
+    COUNT(*) OVER()) para que el frontend pueda calcular totalPages real."""
+    offset = (page - 1) * limit
+    sql = text(f"""
+        WITH base AS (
+            {base_query_sql}
+        )
+        SELECT base.*, COUNT(*) OVER() AS __total_count
+        FROM base
+        ORDER BY {order_by_sql}
+        LIMIT :__limit OFFSET :__offset
+    """)
+    result = await db.execute(sql, {**params, "__limit": limit, "__offset": offset})
+    rows = result.mappings().all()
+    total = rows[0]["__total_count"] if rows else 0
+    return rows, total
 
 
 async def reporte_ventas(
@@ -17,7 +54,9 @@ async def reporte_ventas(
     estado_pago: Optional[str] = None,
     metodo_pago: Optional[str] = None,
     canal_venta: Optional[str] = None,
-) -> list[dict[str, Any]]:
+    page: int = 1,
+    limit: int = 20,
+) -> tuple[list[dict[str, Any]], int]:
     filters = []
     params: dict[str, Any] = {}
 
@@ -61,17 +100,14 @@ async def reporte_ventas(
 
     where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
 
-    sql = text(f"""
+    base_sql = f"""
         SELECT
             a.razon_social                                                AS agencia,
             CONCAT(t_o.nombre, ' → ', t_d.nombre)                        AS ruta,
             TO_CHAR(v.fecha_hora_salida, 'YYYY-MM')                       AS fecha_viaje,
             COUNT(DISTINCT b.id_boleto)                                   AS total_boletos,
             SUM(b.precio_final)                                           AS total_ventas,
-            COALESCE(
-                SUM(b.precio_final) * MAX(cc.porcentaje_comision) / 100,
-                0
-            )                                                              AS comision
+            {_COMISION_EXPR}                                              AS comision
         FROM boletos b
         JOIN viajes v   ON b.id_viaje = v.id_viaje
         JOIN rutas r    ON v.id_ruta  = r.id_ruta
@@ -79,18 +115,15 @@ async def reporte_ventas(
         JOIN terminales t_d ON r.id_terminal_destino = t_d.id_terminal
         JOIN agencias a ON r.id_agencia = a.id_agencia
         LEFT JOIN pagos pg ON pg.id_boleto = b.id_boleto
-        LEFT JOIN configuracion_comisiones cc
-            ON cc.id_agencia = a.id_agencia
-           AND cc.fecha_inicio <= b.fecha_emision
-           AND (cc.fecha_fin IS NULL OR cc.fecha_fin >= b.fecha_emision)
+        {_COMISION_JOIN}
         {where_clause}
         GROUP BY a.razon_social, ruta, fecha_viaje
-        ORDER BY fecha_viaje DESC, a.razon_social, ruta
-    """)
+    """
 
-    result = await db.execute(sql, params)
-    rows = result.mappings().all()
-    return [
+    rows, total = await _fetch_paginated(
+        db, base_sql, "fecha_viaje DESC, agencia, ruta", params, page, limit
+    )
+    data = [
         {
             "agencia": row["agencia"],
             "ruta": row["ruta"],
@@ -101,6 +134,7 @@ async def reporte_ventas(
         }
         for row in rows
     ]
+    return data, total
 
 
 async def reporte_viajes(
@@ -111,7 +145,9 @@ async def reporte_viajes(
     id_ruta: Optional[str] = None,
     id_bus: Optional[str] = None,
     estado_viaje: Optional[str] = None,
-) -> list[dict[str, Any]]:
+    page: int = 1,
+    limit: int = 20,
+) -> tuple[list[dict[str, Any]], int]:
     filters = []
     params: dict[str, Any] = {}
 
@@ -148,7 +184,9 @@ async def reporte_viajes(
 
     where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
 
-    sql = text(f"""
+    # Ocupación real: se calcula contra la cantidad de asientos del bus
+    # (tabla `asientos`), no un supuesto fijo de asientos por piso.
+    base_sql = f"""
         SELECT
             v.id_viaje,
             CONCAT(t_o.nombre, ' → ', t_d.nombre) AS ruta,
@@ -156,7 +194,12 @@ async def reporte_viajes(
             v.estado,
             COUNT(b.id_boleto)                     AS total_boletos,
             COALESCE(
-                ROUND(COUNT(b.id_boleto)::numeric / NULLIF(bus.cantidad_pisos * 50, 0) * 100, 2),
+                ROUND(
+                    COUNT(b.id_boleto)::numeric
+                    / NULLIF((SELECT COUNT(*) FROM asientos ast WHERE ast.id_bus = bus.id_bus), 0)
+                    * 100,
+                    2
+                ),
                 0
             )                                      AS ocupacion
         FROM viajes v
@@ -166,13 +209,11 @@ async def reporte_viajes(
         JOIN buses bus      ON v.id_bus               = bus.id_bus
         LEFT JOIN boletos b ON b.id_viaje = v.id_viaje AND b.estado = 'activo'
         {where_clause}
-        GROUP BY v.id_viaje, ruta, v.fecha_hora_salida, v.estado, bus.cantidad_pisos
-        ORDER BY v.fecha_hora_salida DESC
-    """)
+        GROUP BY v.id_viaje, ruta, v.fecha_hora_salida, v.estado, bus.id_bus
+    """
 
-    result = await db.execute(sql, params)
-    rows = result.mappings().all()
-    return [
+    rows, total = await _fetch_paginated(db, base_sql, "fecha_salida DESC", params, page, limit)
+    data = [
         {
             "idViaje": row["id_viaje"],
             "ruta": row["ruta"],
@@ -183,37 +224,49 @@ async def reporte_viajes(
         }
         for row in rows
     ]
+    return data, total
 
 
 async def reporte_manifiesto_sutran(
-    db: AsyncSession, id_viaje: int
+    db: AsyncSession, id_viaje: int, id_agencia: Optional[int] = None
 ) -> list[dict[str, Any]]:
     sql = text("""
         SELECT
             b.id_boleto,
             v.id_viaje,
-            CONCAT(p.nombres, ' ', p.apellido_paterno, ' ', p.apellido_materno) AS pasajero,
+            p.nombres,
+            CONCAT(p.apellido_paterno, ' ', p.apellido_materno)                   AS apellidos,
             p.numero_documento,
             a.numero_asiento                                                      AS asiento,
+            tor.nombre                                                            AS origen,
+            tdes.nombre                                                           AS destino,
             b.email_contacto,
             b.precio_final
         FROM boletos b
         JOIN pasajeros p ON b.id_pasajero = p.id_pasajero
         JOIN asientos a  ON b.id_asiento  = a.id_asiento
         JOIN viajes v    ON b.id_viaje    = v.id_viaje
+        JOIN buses bus   ON v.id_bus      = bus.id_bus
+        JOIN rutas r     ON v.id_ruta     = r.id_ruta
+        JOIN terminales tor  ON r.id_terminal_origen  = tor.id_terminal
+        JOIN terminales tdes ON r.id_terminal_destino = tdes.id_terminal
         WHERE v.id_viaje = :id_viaje
           AND b.estado   = 'activo'
+          AND (:id_agencia IS NULL OR bus.id_agencia = :id_agencia)
         ORDER BY a.numero_asiento
     """)
-    result = await db.execute(sql, {"id_viaje": id_viaje})
+    result = await db.execute(sql, {"id_viaje": id_viaje, "id_agencia": id_agencia})
     rows = result.mappings().all()
     return [
         {
             "idViaje": row["id_viaje"],
             "idBoleto": row["id_boleto"],
-            "pasajero": row["pasajero"],
+            "nombres": row["nombres"],
+            "apellidos": row["apellidos"],
             "numeroDocumento": row["numero_documento"],
             "asiento": row["asiento"],
+            "origen": row["origen"],
+            "destino": row["destino"],
             "emailContacto": row["email_contacto"],
             "precioFinal": float(row["precio_final"]),
         }
@@ -226,7 +279,9 @@ async def reporte_financiero(
     id_agencia: Optional[int] = None,
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
-) -> list[dict[str, Any]]:
+    page: int = 1,
+    limit: int = 20,
+) -> tuple[list[dict[str, Any]], int]:
     filters = []
     params: dict[str, Any] = {}
 
@@ -242,37 +297,27 @@ async def reporte_financiero(
 
     where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
 
-    sql = text(f"""
+    base_sql = f"""
         SELECT
             a.razon_social                                    AS agencia,
             TO_CHAR(b.fecha_emision, 'YYYY-MM')               AS periodo,
             COUNT(DISTINCT b.id_boleto)                       AS total_boletos,
             SUM(b.precio_final)                               AS total_ventas,
-            COALESCE(
-                SUM(b.precio_final) * MAX(cc.porcentaje_comision) / 100,
-                0
-            )                                                  AS comision,
-            COALESCE(
-                SUM(b.precio_final)
-                - SUM(b.precio_final) * MAX(cc.porcentaje_comision) / 100,
-                SUM(b.precio_final)
-            )                                                  AS neto_transferir
+            {_COMISION_EXPR}                                  AS comision,
+            SUM(b.precio_final) - {_COMISION_EXPR}            AS neto_transferir
         FROM boletos b
         JOIN viajes v   ON b.id_viaje = v.id_viaje
         JOIN rutas r    ON v.id_ruta  = r.id_ruta
         JOIN agencias a ON r.id_agencia = a.id_agencia
-        LEFT JOIN configuracion_comisiones cc
-            ON cc.id_agencia = a.id_agencia
-           AND cc.fecha_inicio <= b.fecha_emision
-           AND (cc.fecha_fin IS NULL OR cc.fecha_fin >= b.fecha_emision)
+        {_COMISION_JOIN}
         {where_clause}
         GROUP BY a.razon_social, periodo
-        ORDER BY periodo DESC, a.razon_social
-    """)
+    """
 
-    result = await db.execute(sql, params)
-    rows = result.mappings().all()
-    return [
+    rows, total = await _fetch_paginated(
+        db, base_sql, "periodo DESC, agencia", params, page, limit
+    )
+    data = [
         {
             "agencia": row["agencia"],
             "periodo": row["periodo"],
@@ -283,26 +328,4 @@ async def reporte_financiero(
         }
         for row in rows
     ]
-
-
-async def export_excel(data: list[dict[str, Any]], sheet_name: str = "Reporte") -> bytes:
-    """Genera un archivo Excel en memoria y devuelve los bytes."""
-    import openpyxl
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = sheet_name
-
-    if not data:
-        output = io.BytesIO()
-        wb.save(output)
-        return output.getvalue()
-
-    headers = list(data[0].keys())
-    ws.append(headers)
-    for row in data:
-        ws.append([row.get(h) for h in headers])
-
-    output = io.BytesIO()
-    wb.save(output)
-    return output.getvalue()
+    return data, total

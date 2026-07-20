@@ -38,5 +38,8 @@ class ReporteGenericoOut(BaseModel):
     slug: str
     data: list[dict[str, Any]]
     total: int
+    page: int
+    limit: int
+    total_pages: int = Field(alias="totalPages")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
