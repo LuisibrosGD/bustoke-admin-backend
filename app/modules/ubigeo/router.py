@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from app.dependencies import DbDep
 from app.modules.ubigeo import service
-from app.modules.ubigeo.schemas import DepartamentoOut, DistritoOut, ProvinciaOut
+from app.modules.ubigeo.schemas import DepartamentoOut, DistritoOut, ProvinciaOut, TipoDocumentoOut
 
 router = APIRouter(prefix="/admin/ubigeo", tags=["Ubigeo"])
 
@@ -20,3 +20,8 @@ async def list_provincias(db: DbDep, id_departamento: int | None = None):
 @router.get("/distritos", response_model=list[DistritoOut])
 async def list_distritos(db: DbDep, id_provincia: int | None = None):
     return await service.get_distritos(db, id_provincia)
+
+
+@router.get("/tipos-documento", response_model=list[TipoDocumentoOut])
+async def list_tipos_documento(db: DbDep):
+    return await service.get_tipos_documento(db)

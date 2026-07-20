@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ConflictException, NotFoundException
 from app.modules.choferes.models import Chofer
 from app.modules.choferes.schemas import ChoferCreate, ChoferUpdate
+from app.modules.ubigeo.models import TipoDocumento
 
 
 async def get_all(db: AsyncSession, skip: int = 0, limit: int = 100) -> list[Chofer]:
@@ -45,6 +46,57 @@ async def create(db: AsyncSession, data: ChoferCreate) -> Chofer:
     await db.commit()
     await db.refresh(chofer)
     return chofer
+
+
+async def bulk_create(db: AsyncSession, id_agencia: int, rows: list[dict]) -> dict:
+    """Carga masiva de choferes desde un Excel ya parseado (ver app/core/excel.py).
+    Reutiliza create() fila por fila, así que hereda su validación de
+    documento duplicado (ConflictException -> se cuenta como omitido)."""
+    tipos_result = await db.execute(select(TipoDocumento.id_tipo_documento, TipoDocumento.nombre))
+    tipos_by_nombre = {nombre.strip().lower(): tid for tid, nombre in tipos_result.all()}
+
+    success = 0
+    skipped = 0
+    errors: list[dict] = []
+    for i, row in enumerate(rows, start=2):  # fila 1 = encabezados
+        try:
+            tipo_doc = str(row.get("Tipo Documento") or "").strip()
+            numero_doc = str(row.get("Número Documento") or "").strip()
+            nombres = str(row.get("Nombres") or "").strip()
+            ap_paterno = str(row.get("Apellido Paterno") or "").strip()
+            ap_materno = str(row.get("Apellido Materno") or "").strip()
+
+            id_tipo_documento = tipos_by_nombre.get(tipo_doc.lower())
+            if not id_tipo_documento:
+                raise ValueError(f"Tipo Documento '{tipo_doc}' no existe")
+            if not numero_doc:
+                raise ValueError("Número Documento es requerido")
+            if not nombres or not ap_paterno or not ap_materno:
+                raise ValueError("Nombres, Apellido Paterno y Apellido Materno son requeridos")
+
+            data = ChoferCreate(
+                id_agencia=id_agencia,
+                id_tipo_documento=id_tipo_documento,
+                numero_documento=numero_doc,
+                nombres=nombres,
+                apellido_paterno=ap_paterno,
+                apellido_materno=ap_materno,
+            )
+            await create(db, data)
+            success += 1
+        except ConflictException:
+            skipped += 1
+        except Exception as e:
+            await db.rollback()
+            errors.append({"row": i, "message": str(e)})
+
+    return {
+        "totalProcessed": len(rows),
+        "successCount": success,
+        "skippedCount": skipped,
+        "errorCount": len(errors),
+        "errors": errors,
+    }
 
 
 async def update(db: AsyncSession, id_chofer: int, data: ChoferUpdate) -> Chofer:

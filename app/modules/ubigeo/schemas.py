@@ -22,3 +22,10 @@ class DistritoOut(BaseModel):
     nombre: str
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class TipoDocumentoOut(BaseModel):
+    id: int = Field(alias="id", validation_alias="id_tipo_documento")
+    nombre: str
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)

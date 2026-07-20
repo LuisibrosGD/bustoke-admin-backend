@@ -41,6 +41,45 @@ async def create_bus(db: AsyncSession, data: BusCreate) -> Bus:
     return bus
 
 
+async def bulk_create_buses(db: AsyncSession, id_agencia: int, rows: list[dict]) -> dict:
+    """Carga masiva de buses desde un Excel ya parseado (ver app/core/excel.py).
+    Reutiliza create_bus() fila por fila, así que hereda su validación de placa
+    duplicada (ConflictException -> se cuenta como omitido, no como error)."""
+    success = 0
+    skipped = 0
+    errors: list[dict] = []
+    for i, row in enumerate(rows, start=2):  # fila 1 = encabezados
+        try:
+            placa = str(row.get("Placa") or "").strip().upper()
+            pisos_raw = row.get("Cantidad de Pisos")
+
+            if not placa:
+                raise ValueError("Placa es requerida")
+            try:
+                cantidad_pisos = int(pisos_raw) if pisos_raw not in (None, "") else 1
+            except (TypeError, ValueError):
+                raise ValueError(f"Cantidad de Pisos '{pisos_raw}' no es un número válido")
+            if cantidad_pisos not in (1, 2):
+                raise ValueError("Cantidad de Pisos debe ser 1 o 2")
+
+            data = BusCreate(id_agencia=id_agencia, placa=placa, cantidad_pisos=cantidad_pisos)
+            await create_bus(db, data)
+            success += 1
+        except ConflictException:
+            skipped += 1
+        except Exception as e:
+            await db.rollback()
+            errors.append({"row": i, "message": str(e)})
+
+    return {
+        "totalProcessed": len(rows),
+        "successCount": success,
+        "skippedCount": skipped,
+        "errorCount": len(errors),
+        "errors": errors,
+    }
+
+
 async def update_bus(db: AsyncSession, id_bus: int, data: BusUpdate) -> Bus:
     bus = await get_bus_by_id(db, id_bus)
     update_data = data.model_dump(exclude_unset=True, by_alias=False)

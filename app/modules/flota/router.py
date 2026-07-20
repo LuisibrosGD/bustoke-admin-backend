@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Query
+from datetime import datetime
 
-from app.dependencies import AdminOrSuper, DbDep
+from fastapi import APIRouter, File, Query, Response, UploadFile
+
+from app.core.exceptions import BadRequestException
+from app.core.excel import export_excel, read_excel_rows
+from app.dependencies import AdminOrSuper, DbDep, resolve_agencia_scope
 from app.modules.flota import service
 from app.modules.flota.schemas import (
     AsientoCreate,
@@ -24,10 +28,7 @@ async def list_buses(
     limit: int = Query(100, ge=1, le=500),
     id_agencia: int | None = None,
 ):
-    user_agencia = current_user.get("id_agencia")
-    user_rol = current_user.get("rol")
-    if user_rol == "admin_agencia" and user_agencia:
-        id_agencia = user_agencia
+    id_agencia = resolve_agencia_scope(current_user, id_agencia)
     if id_agencia:
         return await service.get_buses_by_agencia(db, id_agencia)
     return await service.get_all_buses(db, skip, limit)
@@ -39,13 +40,46 @@ async def get_bus(id_bus: int, db: DbDep, _: AdminOrSuper):
 
 
 @router.post("/buses", response_model=BusOut, status_code=201)
-async def create_bus(body: BusCreate, db: DbDep, _: AdminOrSuper):
+async def create_bus(body: BusCreate, db: DbDep, current_user: AdminOrSuper):
+    body.id_agencia = resolve_agencia_scope(current_user, body.id_agencia)
     return await service.create_bus(db, body)
 
 
 @router.put("/buses/{id_bus}", response_model=BusOut)
 async def update_bus(id_bus: int, body: BusUpdate, db: DbDep, _: AdminOrSuper):
     return await service.update_bus(db, id_bus, body)
+
+
+@router.post("/buses/carga-masiva")
+async def bulk_upload_buses(
+    db: DbDep,
+    current_user: AdminOrSuper,
+    file: UploadFile = File(...),
+    id_agencia: int | None = None,
+):
+    id_agencia = resolve_agencia_scope(current_user, id_agencia)
+    if not id_agencia:
+        raise BadRequestException("Selecciona una agencia para la carga masiva")
+    rows = read_excel_rows(await file.read())
+    result = await service.bulk_create_buses(db, id_agencia, rows)
+    result["file"] = {
+        "resourceId": "",
+        "originalName": file.filename,
+        "uploadedBy": current_user.get("email", ""),
+        "uploadedAt": datetime.now().isoformat(),
+    }
+    return result
+
+
+@router.get("/buses/carga-masiva/plantilla")
+async def descargar_plantilla_buses(_: AdminOrSuper):
+    data = [{"Placa": "ABC-123", "Cantidad de Pisos": 2}]
+    content = await export_excel(data, sheet_name="Buses")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=plantilla_buses.xlsx"},
+    )
 
 
 @router.delete("/buses/{id_bus}")
