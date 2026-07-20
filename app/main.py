@@ -2,9 +2,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
 
 from app.config import settings
+from app.core.logging import RequestLoggingMiddleware, setup_logging
 
 # Routers
 from app.modules.auth.router import router as auth_router
@@ -30,19 +30,16 @@ from app.modules.public.router import router as public_router
 from app.modules.manifiestos.router import router as manifiestos_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.notificaciones.router import router as notificaciones_router
+from app.modules.search.router import router as search_router
+from app.modules.usuarios.router import router as usuarios_router
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    from app.database import engine
-    from app.modules.viajes.models import Pago  # noqa: ensure model is registered
-    async with engine.begin() as conn:
-        await conn.execute(text("""
-            DO $$ BEGIN
-                CREATE TYPE metodo_pago AS ENUM ('yape', 'plin', 'tarjeta');
-            EXCEPTION WHEN duplicate_object THEN NULL;
-            END $$;
-        """))
-        await conn.run_sync(Pago.metadata.create_all)
+    # El esquema (incluyendo la tabla `pagos` y el enum `metodo_pago`) se
+    # gestiona con Alembic (ver alembic/versions/004_pagos_metodo_pago.py),
+    # no en cada arranque del proceso: evita condiciones de carrera cuando
+    # arrancan varios workers/réplicas a la vez.
+    setup_logging()
     yield
 
 
@@ -55,7 +52,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── CORS ──────────────────────────────────────────────────────────────────────
+# ── Middleware ────────────────────────────────────────────────────────────────
+# El de logging se agrega primero para que envuelva a todos los demás y mida
+# el tiempo total de cada request.
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -86,6 +86,8 @@ app.include_router(manifiestos_router)
 app.include_router(public_router)
 app.include_router(dashboard_router)
 app.include_router(notificaciones_router)
+app.include_router(search_router)
+app.include_router(usuarios_router)
 
 
 @app.get("/", tags=["Health"])

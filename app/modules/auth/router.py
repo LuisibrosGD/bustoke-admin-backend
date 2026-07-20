@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Response
 
+from app.core.rate_limit import login_rate_limit
 from app.dependencies import AdminOrSuper, CurrentUser, DbDep
 from app.modules.auth import service
 from app.modules.auth.schemas import (
@@ -17,6 +18,10 @@ router = APIRouter(prefix="/admin/auth", tags=["Auth"])
 
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest, db: DbDep):
+    # Rate limit por email: frena fuerza bruta contra una cuenta específica.
+    # (Por email y no por IP porque el login llega vía el proxy BFF de Next.js,
+    # que enmascara la IP real del cliente.)
+    login_rate_limit.check(f"login:{body.email.lower()}")
     user = await service.authenticate_user(db, body.email, body.password)
     return service.build_token_response(user)
 

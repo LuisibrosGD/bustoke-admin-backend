@@ -1,10 +1,13 @@
 import bcrypt
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from jose import JWTError, jwt
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -15,12 +18,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         # Validar que el hash tenga formato bcrypt válido
         if not hashed_password or len(hashed_password) < 50:
-            print(f"[ERROR] Hash inválido - longitud: {len(hashed_password)}")
+            logger.warning("Hash inválido - longitud: %d", len(hashed_password) if hashed_password else 0)
             return False
 
         # Validar que comience con prefijo bcrypt válido
         if not hashed_password.startswith(("$2a$", "$2b$", "$2y$")):
-            print(f"[ERROR] Hash no es bcrypt válido: {hashed_password[:20]}")
+            logger.warning("Hash no es bcrypt válido (prefijo inesperado)")
             return False
 
         return bcrypt.checkpw(
@@ -29,7 +32,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         )
 
     except (ValueError, TypeError) as e:
-        print(f"[ERROR] Error verificando contraseña: {e}")
+        logger.warning("Error verificando contraseña: %s", e)
         return False
 
 

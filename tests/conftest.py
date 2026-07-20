@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
@@ -7,6 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limit():
+    """Limpia el estado en memoria del rate limiter antes de cada test para que
+    los múltiples logins de la suite (mismo email) no disparen el 429."""
+    from app.core.rate_limit import _hits
+
+    _hits.clear()
+    yield
 
 
 @pytest_asyncio.fixture(scope="session")

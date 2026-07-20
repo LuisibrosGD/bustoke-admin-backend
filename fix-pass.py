@@ -1,5 +1,6 @@
 # fix_pass.py (versión con SQL directo)
 import asyncio
+import secrets
 import sys
 from pathlib import Path
 
@@ -49,8 +50,8 @@ async def fix_corrupted_passwords():
                     f"   Longitud del hash: {len(user.password_hash) if user.password_hash else 0}"
                 )
 
-                # Generar nuevo hash
-                temp_password = f"TempPassword123!{user.id_usuario}"
+                # Generar una contraseña temporal aleatoria (no predecible)
+                temp_password = secrets.token_urlsafe(12)
                 new_hash = get_password_hash(temp_password)
 
                 # UPDATE directo usando SQL
