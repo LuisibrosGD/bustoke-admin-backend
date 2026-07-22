@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Query
 
-from app.dependencies import AdminOrSuper, DbDep, SuperAdmin
+from app.core.exceptions import NotFoundException
+from app.dependencies import AdminOrSuper, DbDep, SuperAdmin, resolve_agencia_scope
 from app.modules.agencias import service
 from app.modules.agencias.schemas import AgenciaCreate, AgenciaOut, AgenciaUpdate
 
@@ -14,16 +15,21 @@ async def list_agencias(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
 ):
-    id_agencia = current_user.get("id_agencia")
-    rol = current_user.get("rol")
-    if rol == "admin_agencia" and id_agencia:
+    id_agencia = resolve_agencia_scope(current_user)
+    if id_agencia:
         agencia = await service.get_by_id(db, id_agencia)
         return [agencia]
     return await service.get_all(db, skip, limit)
 
 
 @router.get("/{id_agencia}", response_model=AgenciaOut)
-async def get_agencia(id_agencia: int, db: DbDep, _: AdminOrSuper):
+async def get_agencia(id_agencia: int, db: DbDep, current_user: AdminOrSuper):
+    # admin_agencia / admin_terminal solo pueden ver su propia agencia:
+    # sin este chequeo, cualquiera podia pedir el RUC/datos bancarios de
+    # otra agencia con solo cambiar el id en la URL.
+    scoped_id = resolve_agencia_scope(current_user, id_agencia)
+    if scoped_id is not None and scoped_id != id_agencia:
+        raise NotFoundException(f"Agencia {id_agencia} no encontrada")
     return await service.get_by_id(db, id_agencia)
 
 
