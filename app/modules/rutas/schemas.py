@@ -10,7 +10,7 @@ class RutaBase(BaseModel):
     id_agencia: int = Field(alias="idAgencia")
     id_terminal_origen: int = Field(alias="idTerminalOrigen")
     id_terminal_destino: int = Field(alias="idTerminalDestino")
-    tarifa_base: Decimal = Field(alias="tarifaBase")
+    tarifa_base: Decimal = Field(alias="tarifaBase", ge=0)
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -23,7 +23,7 @@ class RutaUpdate(BaseModel):
     id_agencia: Optional[int] = Field(default=None, alias="idAgencia")
     id_terminal_origen: Optional[int] = Field(default=None, alias="idTerminalOrigen")
     id_terminal_destino: Optional[int] = Field(default=None, alias="idTerminalDestino")
-    tarifa_base: Optional[Decimal] = Field(default=None, alias="tarifaBase")
+    tarifa_base: Optional[Decimal] = Field(default=None, alias="tarifaBase", ge=0)
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
