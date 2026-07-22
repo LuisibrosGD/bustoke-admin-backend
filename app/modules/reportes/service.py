@@ -9,13 +9,15 @@ from app.core.excel import export_excel  # noqa: F401 (reexportado para reportes
 
 # Fragmento de comisión reutilizado por reporte_ventas y reporte_financiero:
 # ambos calculan la comisión vigente de la agencia a la fecha de emisión del boleto.
+# Es por-boleto (sin agregar): cada reporte devuelve una fila por venta, no un
+# resumen agrupado por agencia/ruta/periodo.
 _COMISION_JOIN = """
     LEFT JOIN configuracion_comisiones cc
         ON cc.id_agencia = a.id_agencia
        AND cc.fecha_inicio <= b.fecha_emision
        AND (cc.fecha_fin IS NULL OR cc.fecha_fin >= b.fecha_emision)
 """
-_COMISION_EXPR = "COALESCE(SUM(b.precio_final) * MAX(cc.porcentaje_comision) / 100, 0)"
+_COMISION_EXPR = "COALESCE(b.precio_final * cc.porcentaje_comision / 100, 0)"
 
 
 async def _fetch_paginated(
@@ -100,13 +102,15 @@ async def reporte_ventas(
 
     where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
 
+    # Una fila por boleto (no un resumen agrupado): el frontend pagina y
+    # cuenta filas reales, no un agregado por agencia/ruta/mes.
     base_sql = f"""
         SELECT
             a.razon_social                                                AS agencia,
             CONCAT(t_o.nombre, ' → ', t_d.nombre)                        AS ruta,
-            TO_CHAR(v.fecha_hora_salida, 'YYYY-MM')                       AS fecha_viaje,
-            COUNT(DISTINCT b.id_boleto)                                   AS total_boletos,
-            SUM(b.precio_final)                                           AS total_ventas,
+            v.fecha_hora_salida                                           AS fecha_viaje,
+            CONCAT(p.nombres, ' ', p.apellido_paterno)                    AS pasajero,
+            b.precio_final                                                AS monto,
             {_COMISION_EXPR}                                              AS comision
         FROM boletos b
         JOIN viajes v   ON b.id_viaje = v.id_viaje
@@ -114,10 +118,10 @@ async def reporte_ventas(
         JOIN terminales t_o ON r.id_terminal_origen = t_o.id_terminal
         JOIN terminales t_d ON r.id_terminal_destino = t_d.id_terminal
         JOIN agencias a ON r.id_agencia = a.id_agencia
+        JOIN pasajeros p ON b.id_pasajero = p.id_pasajero
         LEFT JOIN pagos pg ON pg.id_boleto = b.id_boleto
         {_COMISION_JOIN}
         {where_clause}
-        GROUP BY a.razon_social, ruta, fecha_viaje
     """
 
     rows, total = await _fetch_paginated(
@@ -127,9 +131,9 @@ async def reporte_ventas(
         {
             "agencia": row["agencia"],
             "ruta": row["ruta"],
-            "fechaViaje": row["fecha_viaje"],
-            "totalBoletos": int(row["total_boletos"]),
-            "totalVentas": float(row["total_ventas"]),
+            "fechaViaje": str(row["fecha_viaje"]),
+            "pasajero": row["pasajero"],
+            "monto": float(row["monto"]),
             "comision": float(row["comision"]),
         }
         for row in rows
@@ -297,34 +301,36 @@ async def reporte_financiero(
 
     where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
 
+    # Una fila por boleto (no un resumen agrupado por agencia/periodo).
     base_sql = f"""
         SELECT
             a.razon_social                                    AS agencia,
             TO_CHAR(b.fecha_emision, 'YYYY-MM')               AS periodo,
-            COUNT(DISTINCT b.id_boleto)                       AS total_boletos,
-            SUM(b.precio_final)                               AS total_ventas,
+            b.fecha_emision                                   AS fecha,
+            b.id_boleto                                        AS id_boleto,
+            b.precio_final                                    AS monto,
             {_COMISION_EXPR}                                  AS comision,
-            SUM(b.precio_final) - {_COMISION_EXPR}            AS neto_transferir
+            b.precio_final - {_COMISION_EXPR}                 AS neto
         FROM boletos b
         JOIN viajes v   ON b.id_viaje = v.id_viaje
         JOIN rutas r    ON v.id_ruta  = r.id_ruta
         JOIN agencias a ON r.id_agencia = a.id_agencia
         {_COMISION_JOIN}
         {where_clause}
-        GROUP BY a.razon_social, periodo
     """
 
     rows, total = await _fetch_paginated(
-        db, base_sql, "periodo DESC, agencia", params, page, limit
+        db, base_sql, "fecha DESC, agencia", params, page, limit
     )
     data = [
         {
             "agencia": row["agencia"],
             "periodo": row["periodo"],
-            "totalBoletos": int(row["total_boletos"]),
-            "totalVentas": float(row["total_ventas"]),
+            "fecha": str(row["fecha"]),
+            "idBoleto": row["id_boleto"],
+            "monto": float(row["monto"]),
             "comision": float(row["comision"]),
-            "netoTransferir": float(row["neto_transferir"]),
+            "neto": float(row["neto"]),
         }
         for row in rows
     ]
