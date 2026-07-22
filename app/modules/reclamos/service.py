@@ -79,10 +79,11 @@ async def create_mensaje(db: AsyncSession, data: MensajeReclamoCreate) -> Mensaj
     db.add(m)
 
     if data.id_usuario != reclamo.id_usuario:
+        titulo = f"Nuevo mensaje en reclamo: {reclamo.motivo}"[:150]
         n = Notificacion(
             id_usuario=reclamo.id_usuario,
             tipo="mensaje_reclamo",
-            titulo=f"Nuevo mensaje en reclamo: {reclamo.motivo}",
+            titulo=titulo,
             mensaje=data.text_mensaje[:200],
             referencia_tipo="reclamo",
             referencia_id=reclamo.id_reclamo,
