@@ -14,7 +14,7 @@ from app.database import Base  # noqa: F401 — activa el metadata
 # Módulos — importar todos los modelos
 from app.modules.auth.models import Usuario  # noqa: F401
 from app.modules.agencias.models import Agencia  # noqa: F401
-from app.modules.flota.models import Bus, Asiento  # noqa: F401
+from app.modules.flota.models import Bus, Asiento, AmenidadBus  # noqa: F401
 from app.modules.rutas.models import Ruta, TarifaRuta  # noqa: F401
 from app.modules.viajes.models import Viaje, Pasajero, Boleto  # noqa: F401
 from app.modules.terminales.models import Terminal  # noqa: F401

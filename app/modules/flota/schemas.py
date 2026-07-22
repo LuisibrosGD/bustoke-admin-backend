@@ -101,3 +101,37 @@ class AsientoOut(BaseModel):
     bloqueado_manual: bool = Field(alias="bloqueadoManual")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+# ── Amenidad ──────────────────────────────────────────────────────────────────
+# Elemento no-asiento del plano del bus (TV, baño, escaleras, cafetera).
+
+class AmenidadBase(BaseModel):
+    id_bus: int = Field(alias="idBus")
+    tipo: str
+    piso: int = 1
+    coord_x: int = Field(alias="coordX")
+    coord_y: int = Field(alias="coordY")
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class AmenidadCreate(AmenidadBase):
+    pass
+
+
+class AmenidadOut(BaseModel):
+    id: int = Field(alias="id", validation_alias="id_amenidad")
+    id_bus: int = Field(alias="idBus")
+    tipo: str
+    piso: int
+    coord_x: int = Field(alias="coordX")
+    coord_y: int = Field(alias="coordY")
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class ReemplazarAmenidadesRequest(BaseModel):
+    amenidades: list[AmenidadCreate] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)

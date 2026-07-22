@@ -1,11 +1,17 @@
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictException, NotFoundException
-from app.modules.flota.models import Asiento, Bus
-from app.modules.flota.schemas import AsientoCreate, AsientoUpdate, BusCreate, BusUpdate
+from app.modules.flota.models import AmenidadBus, Asiento, Bus
+from app.modules.flota.schemas import (
+    AmenidadCreate,
+    AsientoCreate,
+    AsientoUpdate,
+    BusCreate,
+    BusUpdate,
+)
 
 
 # ── Buses ─────────────────────────────────────────────────────────────────────
@@ -154,3 +160,32 @@ async def delete_asiento(db: AsyncSession, id_asiento: int) -> dict:
             f"No se puede eliminar el asiento {id_asiento}: tiene boletos vendidos asociados"
         ) from e
     return {"message": f"Asiento {id_asiento} eliminado"}
+
+
+# ── Amenidades ────────────────────────────────────────────────────────────────
+
+async def get_amenidades_by_bus(db: AsyncSession, id_bus: int) -> list[AmenidadBus]:
+    result = await db.execute(select(AmenidadBus).where(AmenidadBus.id_bus == id_bus))
+    return list(result.scalars().all())
+
+
+async def replace_amenidades(db: AsyncSession, id_bus: int, data: list[AmenidadCreate]) -> list[AmenidadBus]:
+    """Reemplaza todas las amenidades del bus por el set nuevo. A diferencia
+    de los asientos, nada hace FK a amenidades_bus, así que un borrar-y-
+    recrear completo es seguro (sin el riesgo de boletos vendidos)."""
+    await db.execute(delete(AmenidadBus).where(AmenidadBus.id_bus == id_bus))
+    nuevas = [
+        AmenidadBus(
+            id_bus=id_bus,
+            tipo=item.tipo,
+            piso=item.piso,
+            coord_x=item.coord_x,
+            coord_y=item.coord_y,
+        )
+        for item in data
+    ]
+    db.add_all(nuevas)
+    await db.commit()
+    for a in nuevas:
+        await db.refresh(a)
+    return nuevas

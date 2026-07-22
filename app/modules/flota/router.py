@@ -7,12 +7,14 @@ from app.core.excel import export_excel, read_excel_rows
 from app.dependencies import AdminOrSuper, DbDep, resolve_agencia_scope
 from app.modules.flota import service
 from app.modules.flota.schemas import (
+    AmenidadOut,
     AsientoCreate,
     AsientoOut,
     AsientoUpdate,
     BusCreate,
     BusOut,
     BusUpdate,
+    ReemplazarAmenidadesRequest,
 )
 
 router = APIRouter(prefix="/admin/flota", tags=["Flota"])
@@ -112,3 +114,15 @@ async def update_asiento(id_asiento: int, body: AsientoUpdate, db: DbDep, _: Adm
 @router.delete("/asientos/{id_asiento}")
 async def delete_asiento(id_asiento: int, db: DbDep, _: AdminOrSuper):
     return await service.delete_asiento(db, id_asiento)
+
+
+# ── Amenidades ────────────────────────────────────────────────────────────────
+
+@router.get("/buses/{id_bus}/amenidades", response_model=list[AmenidadOut])
+async def list_amenidades(id_bus: int, db: DbDep, _: AdminOrSuper):
+    return await service.get_amenidades_by_bus(db, id_bus)
+
+
+@router.put("/buses/{id_bus}/amenidades", response_model=list[AmenidadOut])
+async def replace_amenidades(id_bus: int, body: ReemplazarAmenidadesRequest, db: DbDep, _: AdminOrSuper):
+    return await service.replace_amenidades(db, id_bus, body.amenidades)

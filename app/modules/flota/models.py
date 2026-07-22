@@ -11,6 +11,13 @@ class TipoServicio(str, enum.Enum):
     normal = "normal"
 
 
+class TipoAmenidad(str, enum.Enum):
+    tv = "tv"
+    bano = "bano"
+    escaleras = "escaleras"
+    cafetera = "cafetera"
+
+
 class Bus(Base):
     __tablename__ = "buses"
 
@@ -42,3 +49,22 @@ class Asiento(Base):
     bloqueado_manual: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     bus: Mapped["Bus"] = relationship("Bus", back_populates="asientos")
+
+
+class AmenidadBus(Base):
+    """Elemento no-asiento del plano del bus (TV, baño, escaleras, cafetera).
+    Puramente informativo/visual: a diferencia de Asiento, nada más hace
+    referencia a esta tabla, así que se reemplaza completa en cada guardado
+    de plantilla (sin el problema de FKs que sí tiene Asiento con Boleto)."""
+
+    __tablename__ = "amenidades_bus"
+
+    id_amenidad: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id_bus: Mapped[int] = mapped_column(Integer, ForeignKey("buses.id_bus"), nullable=False)
+    tipo: Mapped[TipoAmenidad] = mapped_column(
+        SAEnum(TipoAmenidad, name="tipo_amenidad", create_type=False),
+        nullable=False,
+    )
+    piso: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    coord_x: Mapped[int] = mapped_column(Integer, nullable=False)
+    coord_y: Mapped[int] = mapped_column(Integer, nullable=False)
