@@ -1,6 +1,7 @@
 import secrets
+from datetime import date
 
-from sqlalchemy import func, literal_column, select
+from sqlalchemy import func, literal_column, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestException, ConflictException, NotFoundException
@@ -101,6 +102,20 @@ async def generar_liquidaciones(
     )
     rows = result.all()
 
+    # Tasa de comision vigente por agencia al inicio del periodo (misma
+    # tabla configuracion_comisiones que usan los reportes de ventas/financiero).
+    periodo_inicio = date.fromisoformat(f"{periodo}-01")
+    comision_result = await db.execute(
+        text("""
+            SELECT id_agencia, porcentaje_comision, monto_fijo_comision
+            FROM configuracion_comisiones
+            WHERE fecha_inicio <= :periodo_inicio
+              AND (fecha_fin IS NULL OR fecha_fin >= :periodo_inicio)
+        """),
+        {"periodo_inicio": periodo_inicio},
+    )
+    comisiones_por_agencia = {row.id_agencia: row for row in comision_result.all()}
+
     created: list[LiquidacionAgencia] = []
     for row in rows:
         agencia_id = row[0]
@@ -118,12 +133,17 @@ async def generar_liquidaciones(
         if existing.scalar_one_or_none():
             continue
 
+        config = comisiones_por_agencia.get(agencia_id)
+        porcentaje = config.porcentaje_comision if config else 0
+        monto_fijo = config.monto_fijo_comision if config else 0
+        comision_plataforma = (total_ventas * porcentaje / 100) + monto_fijo
+
         liq = LiquidacionAgencia(
             id_agencia=agencia_id,
             periodo=periodo,
             monto_ventas=total_ventas,
-            comision_plataforma=0,
-            monto_a_transferir=0,
+            comision_plataforma=comision_plataforma,
+            monto_a_transferir=total_ventas - comision_plataforma,
             estado_pago="pendiente",
         )
         db.add(liq)
