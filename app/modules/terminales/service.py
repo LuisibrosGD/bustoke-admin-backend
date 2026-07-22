@@ -1,11 +1,20 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import ConflictException, NotFoundException
 from app.modules.agencias_terminales.models import AgenciaTerminal
 from app.modules.terminales.models import Terminal
 from app.modules.terminales.schemas import TerminalCreate, TerminalUpdate
+
+
+async def _assert_nombre_disponible(db: AsyncSession, nombre: str, excluir_id: int | None = None) -> None:
+    query = select(Terminal.id_terminal).where(func.lower(Terminal.nombre) == nombre.strip().lower())
+    if excluir_id is not None:
+        query = query.where(Terminal.id_terminal != excluir_id)
+    result = await db.execute(query.limit(1))
+    if result.scalar_one_or_none() is not None:
+        raise ConflictException(f"Ya existe un terminal con el nombre '{nombre}'")
 
 
 async def get_all(
@@ -38,6 +47,7 @@ async def get_by_id(db: AsyncSession, id_terminal: int) -> Terminal:
 
 
 async def create(db: AsyncSession, data: TerminalCreate) -> Terminal:
+    await _assert_nombre_disponible(db, data.nombre)
     terminal = Terminal(
         id_distrito=data.id_distrito,
         nombre=data.nombre,
@@ -51,6 +61,8 @@ async def create(db: AsyncSession, data: TerminalCreate) -> Terminal:
 
 async def update_terminal(db: AsyncSession, id_terminal: int, data: TerminalUpdate) -> Terminal:
     terminal = await get_by_id(db, id_terminal)
+    if data.nombre is not None:
+        await _assert_nombre_disponible(db, data.nombre, excluir_id=id_terminal)
     update_data = data.model_dump(exclude_unset=True, by_alias=False)
     for key, value in update_data.items():
         setattr(terminal, key, value)
