@@ -1,4 +1,6 @@
+from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictException, NotFoundException
@@ -67,6 +69,8 @@ async def bulk_create_buses(db: AsyncSession, id_agencia: int, rows: list[dict])
             success += 1
         except ConflictException:
             skipped += 1
+        except ValidationError as e:
+            errors.append({"row": i, "message": e.errors()[0]["msg"]})
         except Exception as e:
             await db.rollback()
             errors.append({"row": i, "message": str(e)})
@@ -142,5 +146,11 @@ async def update_asiento(db: AsyncSession, id_asiento: int, data: AsientoUpdate)
 async def delete_asiento(db: AsyncSession, id_asiento: int) -> dict:
     asiento = await get_asiento_by_id(db, id_asiento)
     await db.delete(asiento)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        raise ConflictException(
+            f"No se puede eliminar el asiento {id_asiento}: tiene boletos vendidos asociados"
+        ) from e
     return {"message": f"Asiento {id_asiento} eliminado"}

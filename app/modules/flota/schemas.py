@@ -1,6 +1,19 @@
+import re
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# Placa peruana: 3 letras/dígitos, guion, 3 o 4 letras/dígitos (p.ej. CGS-103, A1B-2345).
+PLACA_PATTERN = re.compile(r"^[A-Z0-9]{3}-[A-Z0-9]{3,4}$")
+
+
+def validar_formato_placa(value: str) -> str:
+    normalizada = value.strip().upper()
+    if not PLACA_PATTERN.match(normalizada):
+        raise ValueError(
+            "Formato de placa inválido. Debe ser como CGS-103 (3 caracteres, guion, 3 o 4 caracteres)."
+        )
+    return normalizada
 
 
 # ── Bus ──────────────────────────────────────────────────────────────────────
@@ -11,6 +24,11 @@ class BusBase(BaseModel):
     cantidad_pisos: int = Field(default=1, alias="cantidadPisos")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    @field_validator("placa")
+    @classmethod
+    def _validar_placa(cls, v: str) -> str:
+        return validar_formato_placa(v)
 
 
 class BusCreate(BusBase):
@@ -23,6 +41,11 @@ class BusUpdate(BaseModel):
     cantidad_pisos: Optional[int] = Field(default=None, alias="cantidadPisos")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    @field_validator("placa")
+    @classmethod
+    def _validar_placa(cls, v: Optional[str]) -> Optional[str]:
+        return validar_formato_placa(v) if v is not None else v
 
 
 class BusOut(BaseModel):
