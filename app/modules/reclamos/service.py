@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +55,9 @@ async def update_reclamo(db: AsyncSession, id_reclamo: int, data: ReclamoUpdate)
 
 async def delete_reclamo(db: AsyncSession, id_reclamo: int) -> dict:
     r = await get_by_id(db, id_reclamo)
+    # Los mensajes son solo el hilo de conversación de este reclamo, sin
+    # valor propio fuera de él: se eliminan junto con él.
+    await db.execute(delete(MensajeReclamo).where(MensajeReclamo.id_reclamo == id_reclamo))
     await db.delete(r)
     await db.commit()
     return {"message": f"Reclamo {id_reclamo} eliminado"}

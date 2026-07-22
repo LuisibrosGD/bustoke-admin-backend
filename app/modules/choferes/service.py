@@ -1,10 +1,11 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictException, NotFoundException
 from app.modules.choferes.models import Chofer
 from app.modules.choferes.schemas import ChoferCreate, ChoferUpdate
 from app.modules.ubigeo.models import TipoDocumento
+from app.modules.viajes.models import Viaje
 
 
 async def get_all(db: AsyncSession, skip: int = 0, limit: int = 100) -> list[Chofer]:
@@ -111,6 +112,13 @@ async def update(db: AsyncSession, id_chofer: int, data: ChoferUpdate) -> Chofer
 
 async def delete(db: AsyncSession, id_chofer: int) -> dict:
     chofer = await get_by_id(db, id_chofer)
+    tiene_viajes = await db.execute(
+        select(func.count()).select_from(Viaje).where(Viaje.id_chofer == id_chofer)
+    )
+    if tiene_viajes.scalar() > 0:
+        raise ConflictException(
+            f"No se puede eliminar el chofer {id_chofer}: tiene viajes asignados"
+        )
     await db.delete(chofer)
     await db.commit()
     return {"message": f"Chofer {id_chofer} eliminado"}

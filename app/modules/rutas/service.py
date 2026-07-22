@@ -1,12 +1,13 @@
 from decimal import Decimal, InvalidOperation
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import ConflictException, NotFoundException
 from app.modules.rutas.models import Ruta, TarifaRuta
 from app.modules.rutas.schemas import RutaCreate, RutaOut, RutaUpdate, TarifaRutaCreate, TarifaRutaUpdate
 from app.modules.terminales.models import Terminal
+from app.modules.viajes.models import Viaje
 
 
 async def _enriquecer_rutas(db: AsyncSession, rutas: list[Ruta]) -> list[RutaOut]:
@@ -150,6 +151,17 @@ async def update_ruta(db: AsyncSession, id_ruta: int, data: RutaUpdate) -> RutaO
 
 async def delete_ruta(db: AsyncSession, id_ruta: int) -> dict:
     ruta = await get_ruta_by_id_raw(db, id_ruta)
+
+    tiene_viajes = await db.execute(
+        select(func.count()).select_from(Viaje).where(Viaje.id_ruta == id_ruta)
+    )
+    if tiene_viajes.scalar() > 0:
+        raise ConflictException(
+            f"No se puede eliminar la ruta {id_ruta}: tiene viajes asociados"
+        )
+
+    # Sin viajes, las tarifas de esa ruta son solo config sin valor propio.
+    await db.execute(delete(TarifaRuta).where(TarifaRuta.id_ruta == id_ruta))
     await db.delete(ruta)
     await db.commit()
     return {"message": f"Ruta {id_ruta} eliminada"}

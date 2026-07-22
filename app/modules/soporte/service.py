@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
@@ -71,6 +71,9 @@ async def get_historial(db: AsyncSession, id_ticket: int) -> list[HistorialCambi
 
 async def delete_ticket(db: AsyncSession, id_ticket: int) -> dict:
     t = await get_by_id(db, id_ticket)
+    # El historial es solo el audit-trail de cambios de este ticket, sin
+    # valor propio fuera de él: se elimina junto con él.
+    await db.execute(delete(HistorialCambioSoporte).where(HistorialCambioSoporte.id_ticket == id_ticket))
     await db.delete(t)
     await db.commit()
     return {"message": f"Ticket {id_ticket} eliminado"}

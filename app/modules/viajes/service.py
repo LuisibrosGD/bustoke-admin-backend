@@ -1,13 +1,14 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.dependencies import terminal_ruta_condition
 from app.modules.flota.models import Bus
+from app.modules.manifiestos.models import ManifiestoSutran
 from app.modules.rutas.models import Ruta
 
-from app.core.exceptions import NotFoundException
-from app.modules.viajes.models import Boleto, Pasajero, Viaje
+from app.core.exceptions import ConflictException, NotFoundException
+from app.modules.viajes.models import Boleto, Pago, Pasajero, Viaje
 from app.modules.viajes.schemas import (
     BoletoCreate,
     BoletoUpdate,
@@ -109,6 +110,23 @@ async def update_viaje(db: AsyncSession, id_viaje: int, data: ViajeUpdate, id_ag
 
 async def delete_viaje(db: AsyncSession, id_viaje: int, id_agencia: int | None = None, id_terminal: int | None = None) -> dict:
     viaje = await get_viaje_by_id(db, id_viaje, id_agencia, id_terminal)
+
+    tiene_boletos = await db.execute(
+        select(func.count()).select_from(Boleto).where(Boleto.id_viaje == id_viaje)
+    )
+    if tiene_boletos.scalar() > 0:
+        raise ConflictException(
+            f"No se puede eliminar el viaje {id_viaje}: tiene boletos vendidos asociados"
+        )
+
+    tiene_manifiestos = await db.execute(
+        select(func.count()).select_from(ManifiestoSutran).where(ManifiestoSutran.id_viaje == id_viaje)
+    )
+    if tiene_manifiestos.scalar() > 0:
+        raise ConflictException(
+            f"No se puede eliminar el viaje {id_viaje}: tiene un manifiesto SUTRAN generado"
+        )
+
     await db.delete(viaje)
     await db.commit()
     return {"message": f"Viaje {id_viaje} eliminado"}
@@ -221,6 +239,13 @@ async def update_pasajero(db: AsyncSession, id_pasajero: int, data: PasajeroUpda
 
 async def delete_pasajero(db: AsyncSession, id_pasajero: int, id_agencia: int | None = None, id_terminal: int | None = None) -> dict:
     pasajero = await get_pasajero_by_id(db, id_pasajero, id_agencia, id_terminal)
+    tiene_boletos = await db.execute(
+        select(func.count()).select_from(Boleto).where(Boleto.id_pasajero == id_pasajero)
+    )
+    if tiene_boletos.scalar() > 0:
+        raise ConflictException(
+            f"No se puede eliminar el pasajero {id_pasajero}: tiene boletos comprados asociados"
+        )
     await db.delete(pasajero)
     await db.commit()
     return {"message": f"Pasajero {id_pasajero} eliminado"}
@@ -297,6 +322,13 @@ async def update_boleto(db: AsyncSession, id_boleto: int, data: BoletoUpdate, id
 
 async def delete_boleto(db: AsyncSession, id_boleto: int, id_agencia: int | None = None, id_terminal: int | None = None) -> dict:
     boleto = await get_boleto_by_id(db, id_boleto, id_agencia, id_terminal)
+    tiene_pagos = await db.execute(
+        select(func.count()).select_from(Pago).where(Pago.id_boleto == id_boleto)
+    )
+    if tiene_pagos.scalar() > 0:
+        raise ConflictException(
+            f"No se puede eliminar el boleto {id_boleto}: tiene un registro de pago asociado"
+        )
     await db.delete(boleto)
     await db.commit()
     return {"message": f"Boleto {id_boleto} eliminado"}

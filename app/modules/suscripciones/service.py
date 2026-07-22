@@ -1,7 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import ConflictException, NotFoundException
 from app.modules.suscripciones.models import Plan, Suscripcion
 from app.modules.suscripciones.schemas import (
     PlanCreate,
@@ -46,6 +46,13 @@ async def update_plan(db: AsyncSession, id_plan: int, data: PlanUpdate) -> Plan:
 
 async def delete_plan(db: AsyncSession, id_plan: int) -> dict:
     p = await get_plan_by_id(db, id_plan)
+    tiene_suscripciones = await db.execute(
+        select(func.count()).select_from(Suscripcion).where(Suscripcion.id_plan == id_plan)
+    )
+    if tiene_suscripciones.scalar() > 0:
+        raise ConflictException(
+            f"No se puede eliminar el plan {id_plan}: tiene suscripciones asociadas"
+        )
     await db.delete(p)
     await db.commit()
     return {"message": f"Plan {id_plan} eliminado"}

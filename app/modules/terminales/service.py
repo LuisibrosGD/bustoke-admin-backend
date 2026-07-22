@@ -1,9 +1,11 @@
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.core.exceptions import ConflictException, NotFoundException
 from app.modules.agencias_terminales.models import AgenciaTerminal
+from app.modules.auth.models import Usuario
+from app.modules.rutas.models import Ruta
 from app.modules.terminales.models import Terminal
 from app.modules.terminales.schemas import TerminalCreate, TerminalUpdate
 
@@ -73,6 +75,28 @@ async def update_terminal(db: AsyncSession, id_terminal: int, data: TerminalUpda
 
 async def delete_terminal(db: AsyncSession, id_terminal: int) -> dict:
     terminal = await get_by_id(db, id_terminal)
+
+    tiene_rutas = await db.execute(
+        select(func.count()).select_from(Ruta).where(
+            or_(Ruta.id_terminal_origen == id_terminal, Ruta.id_terminal_destino == id_terminal)
+        )
+    )
+    if tiene_rutas.scalar() > 0:
+        raise ConflictException(
+            f"No se puede eliminar el terminal {id_terminal}: tiene rutas asociadas"
+        )
+
+    tiene_usuarios = await db.execute(
+        select(func.count()).select_from(Usuario).where(Usuario.id_terminal == id_terminal)
+    )
+    if tiene_usuarios.scalar() > 0:
+        raise ConflictException(
+            f"No se puede eliminar el terminal {id_terminal}: tiene usuarios asignados"
+        )
+
+    # Sin rutas ni usuarios, el enlace agencia-terminal es solo config sin
+    # valor propio.
+    await db.execute(delete(AgenciaTerminal).where(AgenciaTerminal.id_terminal == id_terminal))
     await db.delete(terminal)
     await db.commit()
     return {"message": f"Terminal {id_terminal} eliminado"}

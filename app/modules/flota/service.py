@@ -1,5 +1,5 @@
 from pydantic import ValidationError
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,7 @@ from app.modules.flota.schemas import (
     BusCreate,
     BusUpdate,
 )
+from app.modules.viajes.models import Viaje
 
 
 # ── Buses ─────────────────────────────────────────────────────────────────────
@@ -102,6 +103,21 @@ async def update_bus(db: AsyncSession, id_bus: int, data: BusUpdate) -> Bus:
 
 async def delete_bus(db: AsyncSession, id_bus: int) -> dict:
     bus = await get_bus_by_id(db, id_bus)
+
+    tiene_viajes = await db.execute(
+        select(func.count()).select_from(Viaje).where(Viaje.id_bus == id_bus)
+    )
+    if tiene_viajes.scalar() > 0:
+        raise ConflictException(
+            f"No se puede eliminar el bus {id_bus}: tiene viajes asociados"
+        )
+
+    # Sin viajes no puede haber boletos que dependan de sus asientos (todo
+    # boleto requiere un viaje, y el viaje ya fija el bus). Los asientos y
+    # amenidades son solo configuración del bus, sin valor propio: se
+    # eliminan junto con él.
+    await db.execute(delete(Asiento).where(Asiento.id_bus == id_bus))
+    await db.execute(delete(AmenidadBus).where(AmenidadBus.id_bus == id_bus))
     await db.delete(bus)
     await db.commit()
     return {"message": f"Bus {id_bus} eliminado"}
