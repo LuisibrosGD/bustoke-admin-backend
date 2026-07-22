@@ -23,7 +23,7 @@ async def login(body: LoginRequest, db: DbDep):
     # que enmascara la IP real del cliente.)
     login_rate_limit.check(f"login:{body.email.lower()}")
     user = await service.authenticate_user(db, body.email, body.password)
-    return service.build_token_response(user)
+    return await service.build_token_response(db, user)
 
 
 @router.post("/refresh", response_model=TokenResponse)

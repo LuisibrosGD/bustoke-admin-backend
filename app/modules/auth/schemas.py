@@ -19,6 +19,7 @@ class TokenResponse(BaseModel):
     id_usuario: int = Field(alias="idUsuario")
     id_agencia: Optional[int] = Field(default=None, alias="idAgencia")
     id_terminal: Optional[int] = Field(default=None, alias="idTerminal")
+    nombre: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 

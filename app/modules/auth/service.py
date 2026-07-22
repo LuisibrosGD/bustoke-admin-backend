@@ -11,7 +11,9 @@ from app.core.security import (
     get_password_hash,
     verify_password,
 )
-from app.modules.auth.models import Usuario
+from app.modules.agencias.models import Agencia
+from app.modules.auth.models import RolUsuario, Usuario
+from app.modules.terminales.models import Terminal
 
 
 async def authenticate_user(db: AsyncSession, email: str, password: str) -> Usuario:
@@ -26,7 +28,32 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> Usua
     return user
 
 
-def build_token_response(user: Usuario) -> dict:
+async def _resolve_display_name(db: AsyncSession, user: Usuario) -> str:
+    """
+    Los usuarios no tienen un nombre propio en el sistema: la cuenta representa
+    a una agencia o terminal, así que el nombre a mostrar en la UI es el de la
+    entidad asociada al rol, no un dato de la persona.
+    """
+    if user.rol == RolUsuario.admin_agencia and user.id_agencia:
+        result = await db.execute(
+            select(Agencia.razon_social).where(Agencia.id_agencia == user.id_agencia)
+        )
+        nombre = result.scalar_one_or_none()
+        if nombre:
+            return nombre
+    if user.rol == RolUsuario.admin_terminal and user.id_terminal:
+        result = await db.execute(
+            select(Terminal.nombre).where(Terminal.id_terminal == user.id_terminal)
+        )
+        nombre = result.scalar_one_or_none()
+        if nombre:
+            return nombre
+    if user.rol == RolUsuario.superadmin:
+        return "Superadministrador"
+    return user.email
+
+
+async def build_token_response(db: AsyncSession, user: Usuario) -> dict:
     payload = {
         "sub": str(user.id_usuario),
         "email": user.email,
@@ -44,6 +71,7 @@ def build_token_response(user: Usuario) -> dict:
         "idUsuario": user.id_usuario,
         "idAgencia": user.id_agencia,
         "idTerminal": user.id_terminal,
+        "nombre": await _resolve_display_name(db, user),
     }
 
 
@@ -59,7 +87,7 @@ async def refresh_tokens(db: AsyncSession, refresh_token: str) -> dict:
     user = result.scalar_one_or_none()
     if not user or not user.activo:
         raise UnauthorizedException("Usuario no encontrado o inactivo")
-    return build_token_response(user)
+    return await build_token_response(db, user)
 
 
 async def get_usuario(db: AsyncSession, id_usuario: int) -> Usuario:
