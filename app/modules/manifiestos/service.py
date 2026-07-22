@@ -54,8 +54,12 @@ async def get_by_id(
         JOIN terminales tor  ON r.id_terminal_origen  = tor.id_terminal
         JOIN terminales tdes ON r.id_terminal_destino = tdes.id_terminal
         WHERE m.id_manifiesto = :id
-          AND (:id_agencia IS NULL OR b.id_agencia = :id_agencia)
-          AND (:id_terminal IS NULL OR r.id_terminal_origen = :id_terminal OR r.id_terminal_destino = :id_terminal)
+          AND (CAST(:id_agencia AS INTEGER) IS NULL OR b.id_agencia = CAST(:id_agencia AS INTEGER))
+          AND (
+            CAST(:id_terminal AS INTEGER) IS NULL
+            OR r.id_terminal_origen = CAST(:id_terminal AS INTEGER)
+            OR r.id_terminal_destino = CAST(:id_terminal AS INTEGER)
+          )
     """)
     result = await db.execute(
         sql, {"id": id_manifiesto, "id_agencia": id_agencia, "id_terminal": id_terminal}
